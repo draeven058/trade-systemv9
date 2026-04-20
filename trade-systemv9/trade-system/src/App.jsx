@@ -361,7 +361,7 @@ export default function App() {
     const uname=loginForm.username.trim().toLowerCase(), pwd=loginForm.password.trim();
     if(!uname||!pwd){setLoginErr("Enter username and password");return;}
     setLoginLoading(true);
-    const {data,error}=await supabase.from("users").select("*").ilike("username",uname).eq("password",pwd).single();
+    const {data,error}=await supabase.from("users").select("*").eq("username",uname).eq("password",pwd).single();
     if(error||!data){setLoginErr("Invalid username or password.");setLoginLoading(false);return;}
     if(data.active===false){setLoginErr("Account inactive. Contact admin.");setLoginLoading(false);return;}
     setCurrentUser(data);
