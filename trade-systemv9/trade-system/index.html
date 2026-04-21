@@ -34,7 +34,7 @@ select option{background:#1e293b;color:white}
 
 <!-- ══ REPLACE THESE TWO VALUES ══ -->
 <script>
-const SUPABASE_URL = "https://wfvcshudanvvbdfwlapf.supabase.co";
+const SUPABASE_URL      = "https://wfvcshudanvvbdfwlapf.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmdmNzaHVkYW52dmJkZndsYXBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4OTkwMDAsImV4cCI6MjA5MTQ3NTAwMH0.P6TBJJtSq7YnYzNOTV8dZ9-SnvbGKSFuNEOjYyrf-dc";
 </script>
 
@@ -341,27 +341,38 @@ function App(){
   },[]);
 
   const loadBills=useCallback(async(week)=>{
-    if(!week)return;
+    if(!week){setBD([]);return;}
     setBL(true);
-    const{data:allT}=await sb.from("traders").select("*").eq("active",true).order("name");
-    if(!allT?.length){setBL(false);return;}
-    const results=[];
-    for(const trader of allT){
-      const{data:td}=await sb.from("trades").select("*").eq("trader_id",trader.id).eq("week_id",week.id).order("sort_order");
-      if(td?.length){
-        const nr=trader.nse_rate||DEF_NSE;
-        const mm=makeMcxMap(trader.mcx_scripts?.length?trader.mcx_scripts:DEF_MCX);
-        const rep=buildReport(td,nr,mm);
-        results.push({trader,trades:td,report:rep,net:rep.reduce((s,r)=>s+r.net,0)});
+    setBD([]); // clear first so UI shows loading
+    try{
+      const{data:allT}=await sb.from("traders").select("*").eq("active",true).order("name");
+      if(!allT?.length){setBL(false);return;}
+      const results=[];
+      for(const trader of allT){
+        // Load ALL trades (normal + forward + settlement) for this trader+week
+        const{data:td,error}=await sb.from("trades").select("*")
+          .eq("trader_id",trader.id).eq("week_id",week.id)
+          .order("sort_order").order("created_at");
+        if(error)console.error("loadBills error for",trader.name,error);
+        if(td&&td.length>0){
+          const nr=trader.nse_rate||DEF_NSE;
+          const mm=makeMcxMap(trader.mcx_scripts?.length?trader.mcx_scripts:DEF_MCX);
+          const rep=buildReport(td,nr,mm);
+          const net=rep.reduce((s,r)=>s+r.net,0);
+          results.push({trader,trades:td,report:rep,net});
+        }
       }
-    }
-    setBD(results);setBL(false);
+      setBD(results);
+    }catch(e){console.error("loadBills failed:",e);}
+    setBL(false);
   },[]);
 
   useEffect(()=>{if(currentUser){loadTraders();loadWeeks();}if(currentUser?.role==="ADMIN")loadUsers();},[currentUser]);
   useEffect(()=>{if(selTrader&&selWeek)loadTrades(selTrader.id,selWeek.id);},[selTrader,selWeek]);
   useEffect(()=>{if(tab==="Settlement"&&settlWeek)loadSettlRates(settlWeek.id);},[tab,settlWeek]);
   useEffect(()=>{if(billsWeek)loadBills(billsWeek);},[billsWeek]);
+  // Reload bills whenever Bills tab is opened
+  useEffect(()=>{if(tab==="Bills"&&billsWeek)loadBills(billsWeek);},[tab]);
 
   // ── Auto-save ──
   const doSave = useCallback(async(traderId,weekId,tradesArr,showStatus=true)=>{
@@ -544,37 +555,42 @@ function App(){
           .eq("trader_id",trader.id).eq("week_id",settlWeek.id).eq("type","NORMAL");
         if(!tt?.length)continue;
 
-        // Calculate net position per script
-        const netPos={};
+        // Calculate total BUY qty and SELL qty per script
+        const scriptPos={};
         for(const t of tt){
           const s=t.script.toUpperCase();
-          if(!sRateMap[s])continue; // only settle scripts we have rates for
-          if(!netPos[s])netPos[s]={buyQty:0,sellQty:0,exchange:sRateMap[s].exchange,script:s};
-          if(t.action==="BUY")netPos[s].buyQty+=parseFloat(t.qty)||0;
-          else netPos[s].sellQty+=parseFloat(t.qty)||0;
+          if(!sRateMap[s])continue;
+          if(!scriptPos[s])scriptPos[s]={buyQty:0,sellQty:0,exchange:sRateMap[s].exchange,script:s};
+          if(t.action==="BUY")scriptPos[s].buyQty+=parseFloat(t.qty)||0;
+          else scriptPos[s].sellQty+=parseFloat(t.qty)||0;
         }
 
         // Remove old settlement trades for this trader+week
         await sb.from("trades").delete()
           .eq("trader_id",trader.id).eq("week_id",settlWeek.id).eq("is_settlement",true);
 
-        // Create settlement FORWARD trades
+        // Create settlement FORWARD trades:
+        // BUY positions → SELL FORWARD at settlement rate
+        // SELL positions → BUY FORWARD at settlement rate
         const st=[];
-        for(const[script,pos]of Object.entries(netPos)){
+        for(const[script,pos]of Object.entries(scriptPos)){
           const sRate=sRateMap[script];
           if(!sRate)continue;
-          const netQty=pos.buyQty-pos.sellQty;
-          if(Math.abs(netQty)<0.001)continue; // already flat
-          const action=netQty>0?"SELL":"BUY"; // close position
-          const qty=Math.abs(netQty);
-          const price=sRate.rate;
-          const vol=qty*price;
-          st.push({
-            id:uid(),trader_id:trader.id,week_id:settlWeek.id,
-            trade_date:"Settlement",action,qty,price,vol,
-            script,type:"FORWARD",exchange:sRate.exchange,
-            is_settlement:true,sort_order:999999
-          });
+          const price=parseFloat(sRate.rate);
+          // Close BUY side with SELL FORWARD
+          if(pos.buyQty>0.001){
+            st.push({id:uid(),trader_id:trader.id,week_id:settlWeek.id,
+              trade_date:"Settlement",action:"SELL",qty:pos.buyQty,price,
+              vol:pos.buyQty*price,script,type:"FORWARD",exchange:sRate.exchange,
+              is_settlement:true,sort_order:999998});
+          }
+          // Close SELL side with BUY FORWARD
+          if(pos.sellQty>0.001){
+            st.push({id:uid(),trader_id:trader.id,week_id:settlWeek.id,
+              trade_date:"Settlement",action:"BUY",qty:pos.sellQty,price,
+              vol:pos.sellQty*price,script,type:"FORWARD",exchange:sRate.exchange,
+              is_settlement:true,sort_order:999999});
+          }
         }
         if(st.length){await sb.from("trades").insert(st);settledCount++;}
       }
@@ -960,6 +976,9 @@ function App(){
                 {weeks.map(w=><option key={w.id} value={w.id}>{w.label}{w.status==="settled"?" ✓ Settled":""}</option>)}
               </select>
               <button onClick={()=>setPT(p=>p==="dark"?"light":"dark")} style={{background:pdfTheme==="dark"?"#0f172a":"#f0f4f8",border:`2px solid ${pdfTheme==="dark"?"#6366f1":"#2563eb"}`,borderRadius:20,padding:"5px 14px",fontSize:11,fontWeight:700,cursor:"pointer",color:pdfTheme==="dark"?"white":"#1e293b"}}>{pdfTheme==="dark"?"🌑 Dark":"☀️ Light"}</button>
+              {billsWeek&&(
+                <button onClick={()=>loadBills(billsWeek)} style={{...btn("rgba(99,102,241,0.15)","#a5b4fc"),border:"1px solid rgba(99,102,241,0.3)",fontSize:12,padding:"8px 12px"}}>🔄 Refresh</button>
+              )}
               {billsWeek&&billsData.length>0&&(
                 <button onClick={()=>{billsData.forEach(b=>generateBillPDF(b.trader.name,billsWeek.label,b.trades,b.trader,pdfTheme));}}
                   style={{...btn("#0369a1"),fontSize:12,padding:"8px 14px"}}>⬇ Download All Bills</button>
@@ -968,7 +987,12 @@ function App(){
             </div>
 
             {!billsWeek?(<div style={{textAlign:"center",padding:"60px 20px",background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,color:"#475569",fontSize:15}}>Select a week to view bills</div>)
-            :billsData.length===0&&!billsLoad?(<div style={{textAlign:"center",padding:"60px 20px",background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,color:"#475569",fontSize:15}}>No trades found for this week</div>)
+            :billsData.length===0&&!billsLoad?(<div style={{textAlign:"center",padding:"60px 20px",background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14}}>
+              <div style={{fontSize:32,marginBottom:12}}>📋</div>
+              <div style={{color:"#475569",fontSize:15,marginBottom:8}}>No trades found for this week</div>
+              <div style={{color:"#334155",fontSize:12}}>Make sure traders have trades entered in the <strong style={{color:"#6366f1"}}>Entry</strong> tab for this week, then run <strong style={{color:"#4ade80"}}>Settlement</strong></div>
+              <button onClick={()=>loadBills(billsWeek)} style={{marginTop:16,background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:8,color:"#a5b4fc",padding:"8px 18px",fontSize:13,fontWeight:600,cursor:"pointer"}}>🔄 Reload</button>
+            </div>)
             :(
               <>
                 {/* Week summary chips */}
