@@ -44,7 +44,7 @@ const sb = (SUPABASE_URL.includes("supabase.co") && SUPABASE_ANON_KEY.startsWith
   ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 // ── CONSTANTS ──
-const uid  = () => Math.random().toString(36).slice(2);
+const uid = () => crypto.randomUUID();
 const fmt  = (n) => n==null||isNaN(n)?"—":Number(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 const DEF_NSE  = 3000;
 const DEF_MCX  = [
@@ -524,7 +524,7 @@ function App(){
     if(!selTrader||!selWeek){return;}
     setMSaving(true);
     if(saveTimer.current)clearTimeout(saveTimer.current);
-    await doSaveRef.current(selTrader.id,selWeek.id,[...tradesRef.current],true);
+    await doSaveRef.current(selTrader.id,selWeek.id,[...trades],true);
     setMSaving(false);
   };
 
