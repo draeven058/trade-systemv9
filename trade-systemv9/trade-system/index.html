@@ -263,6 +263,15 @@ function App(){
   const [billsLoad,setBL]=useState(false);
   const [editBill,setEB]=useState(null);
 
+  // ── Trade List ──
+  const [tlWeek,setTlWeek]=useState(null);
+  const [tlData,setTlData]=useState([]); // [{trader, trades, editingId}]
+  const [tlLoad,setTlLoad]=useState(false);
+  const [tlSaving,setTlSaving]=useState({}); // {traderId: bool}
+  const [tlMsg,setTlMsg]=useState({});      // {traderId: msg}
+  const [tlAddRow,setTlAddRow]=useState({}); // per trader
+  const [tlExpanded,setTlExpanded]=useState({}); // {traderId: bool}
+
   // ── Users (admin) ──
   const [users,setUsers]=useState([]);
   const [newUser,setNU]=useState({username:"",password:"",role:"USER",name:""});
@@ -340,62 +349,174 @@ function App(){
     }
   },[]);
 
-  const loadBills=useCallback(async(week)=>{
+  const loadBills=async(week)=>{
     if(!week){setBD([]);return;}
     setBL(true);
-    setBD([]); // clear first so UI shows loading
+    setBD([]);
     try{
-      const{data:allT}=await sb.from("traders").select("*").eq("active",true).order("name");
-      if(!allT?.length){setBL(false);return;}
+      const weekId=week.id||week;
+      const{data:allT,error:tErr}=await sb.from("traders").select("*").eq("active",true).order("name");
+      if(tErr||!allT?.length){console.log("No traders:",tErr);setBL(false);return;}
       const results=[];
       for(const trader of allT){
-        // Load ALL trades (normal + forward + settlement) for this trader+week
         const{data:td,error}=await sb.from("trades").select("*")
-          .eq("trader_id",trader.id).eq("week_id",week.id)
-          .order("sort_order").order("created_at");
-        if(error)console.error("loadBills error for",trader.name,error);
+          .eq("trader_id",trader.id).eq("week_id",weekId)
+          .order("sort_order");
+        if(error){console.error("Bill load err",trader.name,error);continue;}
         if(td&&td.length>0){
-          const nr=trader.nse_rate||DEF_NSE;
+          const nr=parseFloat(trader.nse_rate)||DEF_NSE;
           const mm=makeMcxMap(trader.mcx_scripts?.length?trader.mcx_scripts:DEF_MCX);
           const rep=buildReport(td,nr,mm);
           const net=rep.reduce((s,r)=>s+r.net,0);
           results.push({trader,trades:td,report:rep,net});
         }
       }
+      console.log("Bills loaded: "+results.length+" traders for week "+weekId);
       setBD(results);
-    }catch(e){console.error("loadBills failed:",e);}
+    }catch(e){console.error("loadBills crash:",e);}
     setBL(false);
-  },[]);
+  };
+  const loadBillsRef=useRef(loadBills);
+  useEffect(()=>{loadBillsRef.current=loadBills;});
+
+  // ── Load Trade List ──
+  const loadTradeList=async(week)=>{
+    if(!week){setTlData([]);return;}
+    setTlLoad(true);setTlData([]);
+    try{
+      const{data:allT}=await sb.from("traders").select("*").eq("active",true).order("name");
+      if(!allT?.length){setTlLoad(false);return;}
+      const results=[];
+      for(const trader of allT){
+        const{data:td}=await sb.from("trades").select("*")
+          .eq("trader_id",trader.id).eq("week_id",week.id)
+          .order("sort_order");
+        results.push({
+          trader,
+          trades:td?.length?[...td]:[],
+          orig:td?.length?[...td]:[]
+        });
+      }
+      setTlData(results);
+      // Auto-expand traders that have trades
+      const exp={};
+      results.forEach(r=>{if(r.trades.length>0)exp[r.trader.id]=true;});
+      setTlExpanded(exp);
+    }catch(e){console.error("loadTradeList:",e);}
+    setTlLoad(false);
+  };
+  const loadTradeListRef=useRef(loadTradeList);
+  useEffect(()=>{loadTradeListRef.current=loadTradeList;});
+
+  // Save a single trader's trades from trade list
+  const tlSaveTrader=async(traderId,weekId,tradesArr)=>{
+    setTlSaving(p=>({...p,[traderId]:true}));
+    setTlMsg(p=>({...p,[traderId]:""}));
+    try{
+      const{error:de}=await sb.from("trades").delete()
+        .eq("trader_id",traderId).eq("week_id",weekId).eq("is_settlement",false);
+      if(de)throw de;
+      const valid=tradesArr.filter(t=>t.script||t.trade_date);
+      if(valid.length){
+        const ins=valid.map(t=>({
+          id:t.id,trader_id:traderId,week_id:weekId,
+          trade_date:t.trade_date||"",action:(t.action||"BUY").toUpperCase(),
+          qty:parseFloat(t.qty)||0,price:parseFloat(t.price)||0,
+          vol:parseFloat(t.vol)||0,
+          script:(t.script||"").toUpperCase(),
+          type:(t.type||"NORMAL").toUpperCase(),
+          exchange:(t.exchange||"NSE").toUpperCase(),
+          is_settlement:false,sort_order:t.sort_order||Date.now()
+        }));
+        const{error:ie}=await sb.from("trades").insert(ins);
+        if(ie)throw ie;
+      }
+      setTlMsg(p=>({...p,[traderId]:"✓ Saved"}));
+      setTimeout(()=>setTlMsg(p=>({...p,[traderId]:""})),2000);
+    }catch(e){
+      setTlMsg(p=>({...p,[traderId]:"❌ "+e.message}));
+    }
+    setTlSaving(p=>({...p,[traderId]:false}));
+  };
+
+  // Update a trade inside tlData
+  const tlUpdateTrade=(traderId,tradeId,field,val)=>{
+    setTlData(prev=>prev.map(row=>{
+      if(row.trader.id!==traderId)return row;
+      const updated=row.trades.map(t=>{
+        if(t.id!==tradeId)return t;
+        const up={...t,[field]:val};
+        if(field==="qty"||field==="price"){
+          const q=field==="qty"?parseFloat(val):parseFloat(t.qty);
+          const p=field==="price"?parseFloat(val):parseFloat(t.price);
+          up.vol=!isNaN(q)&&!isNaN(p)?(q*p).toFixed(2):"";
+        }
+        return up;
+      });
+      return{...row,trades:updated};
+    }));
+  };
+  const tlAddNewRow=(traderId)=>{
+    const newRow={...blank(),sort_order:Date.now()};
+    setTlData(prev=>prev.map(row=>
+      row.trader.id===traderId?{...row,trades:[...row.trades,newRow]}:row
+    ));
+  };
+  const tlRemoveRow=(traderId,tradeId)=>{
+    setTlData(prev=>prev.map(row=>{
+      if(row.trader.id!==traderId)return row;
+      const filtered=row.trades.filter(t=>t.id!==tradeId);
+      return{...row,trades:filtered.length?filtered:[blank()]};
+    }));
+  };
 
   useEffect(()=>{if(currentUser){loadTraders();loadWeeks();}if(currentUser?.role==="ADMIN")loadUsers();},[currentUser]);
   useEffect(()=>{if(selTrader&&selWeek)loadTrades(selTrader.id,selWeek.id);},[selTrader,selWeek]);
   useEffect(()=>{if(tab==="Settlement"&&settlWeek)loadSettlRates(settlWeek.id);},[tab,settlWeek]);
-  useEffect(()=>{if(billsWeek)loadBills(billsWeek);},[billsWeek]);
+  useEffect(()=>{if(billsWeek)loadBillsRef.current(billsWeek);},[billsWeek]);
   // Reload bills whenever Bills tab is opened
-  useEffect(()=>{if(tab==="Bills"&&billsWeek)loadBills(billsWeek);},[tab]);
+  useEffect(()=>{if(tab==="Bills"&&billsWeek)loadBillsRef.current(billsWeek);},[tab]);
 
   // ── Auto-save ──
-  const doSave = useCallback(async(traderId,weekId,tradesArr,showStatus=true)=>{
-    if(!traderId||!weekId) return;
+  // doSave: saves trades to DB. Uses plain async function (not useCallback) to avoid stale closures
+  const doSave = async(traderId,weekId,tradesArr,showStatus=true)=>{
+    if(!traderId||!weekId)return false;
     if(showStatus)setSS("saving");
     try{
-      await sb.from("trades").delete().eq("trader_id",traderId).eq("week_id",weekId);
-      const ins=tradesArr.filter(t=>t.script||t.trade_date).map(t=>({
-        id:t.id,trader_id:traderId,week_id:weekId,
-        trade_date:t.trade_date||"",action:t.action||"BUY",
-        qty:parseFloat(t.qty)||0,price:parseFloat(t.price)||0,vol:parseFloat(t.vol)||0,
-        script:(t.script||"").toUpperCase(),type:t.type||"NORMAL",exchange:t.exchange||"NSE",
-        is_settlement:t.is_settlement||false,sort_order:t.sort_order||0
-      }));
-      if(ins.length)await sb.from("trades").insert(ins);
+      // Delete existing non-settlement trades, then reinsert
+      const{error:delErr}=await sb.from("trades").delete()
+        .eq("trader_id",traderId).eq("week_id",weekId).eq("is_settlement",false);
+      if(delErr){console.error("Delete error:",delErr);if(showStatus){setSS("error");setTimeout(()=>setSS(""),2500);}return false;}
+      const validTrades=tradesArr.filter(t=>t.script||t.trade_date);
+      if(validTrades.length){
+        const ins=validTrades.map(t=>({
+          id:t.id,trader_id:traderId,week_id:weekId,
+          trade_date:t.trade_date||"",action:t.action||"BUY",
+          qty:parseFloat(t.qty)||0,price:parseFloat(t.price)||0,vol:parseFloat(t.vol)||0,
+          script:(t.script||"").toUpperCase(),type:t.type||"NORMAL",exchange:t.exchange||"NSE",
+          is_settlement:false,sort_order:t.sort_order||0
+        }));
+        const{error:insErr}=await sb.from("trades").insert(ins);
+        if(insErr){console.error("Insert error:",insErr);if(showStatus){setSS("error");setTimeout(()=>setSS(""),2500);}return false;}
+      }
       if(showStatus){setSS("saved");setTimeout(()=>setSS(""),2500);}
-    }catch(e){if(showStatus){setSS("error");setTimeout(()=>setSS(""),2500);}}
-  },[]);
+      return true;
+    }catch(e){
+      console.error("doSave exception:",e);
+      if(showStatus){setSS("error");setTimeout(()=>setSS(""),2500);}
+      return false;
+    }
+  };
+  // Keep a ref to doSave for use in event handlers
+  const doSaveRef=useRef(doSave);
+  useEffect(()=>{doSaveRef.current=doSave;});
 
   useEffect(()=>{
     if(!currentUser||!selTrader||!selWeek||tradesLoad)return;
     if(saveTimer.current)clearTimeout(saveTimer.current);
-    saveTimer.current=setTimeout(()=>doSave(selTrader.id,selWeek.id,trades),1500);
+    // Capture current values in closure for timer
+    const tid=selTrader.id, wid=selWeek.id, tArr=[...trades];
+    saveTimer.current=setTimeout(()=>doSaveRef.current(tid,wid,tArr,true),1500);
     return()=>clearTimeout(saveTimer.current);
   },[trades,currentUser,selTrader,selWeek,tradesLoad]);
 
@@ -403,7 +524,7 @@ function App(){
     if(!selTrader||!selWeek){return;}
     setMSaving(true);
     if(saveTimer.current)clearTimeout(saveTimer.current);
-    await doSave(selTrader.id,selWeek.id,trades,true);
+    await doSaveRef.current(selTrader.id,selWeek.id,[...tradesRef.current],true);
     setMSaving(false);
   };
 
@@ -517,13 +638,13 @@ function App(){
   };
 
   const confirmImport=async(andSave=false)=>{
-    const base=trades.filter(t=>t.script||t.trade_date);
+    const base=tradesRef.current.filter(t=>t.script||t.trade_date);
     const maxO=base.reduce((m,t)=>Math.max(m,t.sort_order||0),0);
     const merged=[...base,...xlPrev.map((t,i)=>({...t,sort_order:maxO+i+1000}))];
     setTrades(merged);setShXP(false);setXP(null);
-    if(andSave&&selTrader&&selWeek){
+    if(andSave&&selTraderRef.current&&selWeekRef.current){
       if(saveTimer.current)clearTimeout(saveTimer.current);
-      await doSave(selTrader.id,selWeek.id,merged,true);
+      await doSaveRef.current(selTraderRef.current.id,selWeekRef.current.id,merged,true);
     }
   };
 
@@ -533,74 +654,101 @@ function App(){
     const missing=settlRates.find(r=>!r.rate||isNaN(parseFloat(r.rate)));
     if(missing){setSettlMsg("Enter settlement rate for: "+missing.script);return;}
     if(!confirm(`Settle week "${settlWeek.label}"?\nThis will create FORWARD settlement trades for all traders who have trades for these scripts.`))return;
-    setSettlLoad(true);setSettlMsg("");
+    setSettlLoad(true);setSettlMsg("⏳ Processing...");
+    const slog=[];
     try{
-      // Save settlement rates to DB
+      // Step 1: Save rates
       for(const r of settlRates){
         await sb.from("settlement_rates").upsert(
-          {week_id:settlWeek.id,script:r.script.toUpperCase(),rate:parseFloat(r.rate),exchange:r.exchange||"NSE"},
+          {week_id:settlWeek.id,script:r.script.toUpperCase().trim(),rate:parseFloat(r.rate),exchange:r.exchange||"NSE"},
           {onConflict:"week_id,script"}
         );
       }
-      // Build a map of settlement rates
-      const sRateMap={};
-      settlRates.forEach(r=>{sRateMap[r.script.toUpperCase()]={rate:parseFloat(r.rate),exchange:r.exchange||"NSE"};});
+      // Step 2: Build rate map
+      const sMap={};
+      settlRates.forEach(r=>{sMap[r.script.toUpperCase().trim()]={rate:parseFloat(r.rate),exchange:r.exchange||"NSE"};});
+      slog.push("Scripts: "+Object.keys(sMap).join(","));
 
-      // Get all traders
+      // Step 3: Load all traders
       const{data:allT}=await sb.from("traders").select("*").eq("active",true);
-      let settledCount=0;
-      for(const trader of allT||[]){
-        // Get NORMAL trades for this trader this week
-        const{data:tt}=await sb.from("trades").select("*")
-          .eq("trader_id",trader.id).eq("week_id",settlWeek.id).eq("type","NORMAL");
-        if(!tt?.length)continue;
+      slog.push("Traders: "+(allT||[]).length);
+      let settledCount=0,totalTrades=0;
 
-        // Calculate total BUY qty and SELL qty per script
-        const scriptPos={};
+      for(const trader of (allT||[])){
+        // Step 4: Load all trades for this trader+week
+        const{data:allTr}=await sb.from("trades").select("*")
+          .eq("trader_id",trader.id).eq("week_id",settlWeek.id);
+        const tt=(allTr||[]).filter(t=>(t.type||"").toUpperCase()==="NORMAL");
+        slog.push(trader.name+":"+tt.length+"normal");
+        if(!tt.length)continue;
+
+        // Step 5: Calc positions
+        const pos={};
         for(const t of tt){
-          const s=t.script.toUpperCase();
-          if(!sRateMap[s])continue;
-          if(!scriptPos[s])scriptPos[s]={buyQty:0,sellQty:0,exchange:sRateMap[s].exchange,script:s};
-          if(t.action==="BUY")scriptPos[s].buyQty+=parseFloat(t.qty)||0;
-          else scriptPos[s].sellQty+=parseFloat(t.qty)||0;
+          const s=(t.script||"").toUpperCase().trim();
+          if(!sMap[s])continue;
+          if(!pos[s])pos[s]={b:0,s:0,exch:sMap[s].exchange};
+          const q=parseFloat(t.qty)||0;
+          if((t.action||"").toUpperCase()==="BUY")pos[s].b+=q;
+          else pos[s].s+=q;
         }
+        if(!Object.keys(pos).length)continue;
 
-        // Remove old settlement trades for this trader+week
+        // Step 6: Delete old settlement trades
         await sb.from("trades").delete()
           .eq("trader_id",trader.id).eq("week_id",settlWeek.id).eq("is_settlement",true);
 
-        // Create settlement FORWARD trades:
-        // BUY positions → SELL FORWARD at settlement rate
-        // SELL positions → BUY FORWARD at settlement rate
-        const st=[];
-        for(const[script,pos]of Object.entries(scriptPos)){
-          const sRate=sRateMap[script];
-          if(!sRate)continue;
-          const price=parseFloat(sRate.rate);
-          // Close BUY side with SELL FORWARD
-          if(pos.buyQty>0.001){
-            st.push({id:uid(),trader_id:trader.id,week_id:settlWeek.id,
-              trade_date:"Settlement",action:"SELL",qty:pos.buyQty,price,
-              vol:pos.buyQty*price,script,type:"FORWARD",exchange:sRate.exchange,
-              is_settlement:true,sort_order:999998});
+        // Step 7: Insert new settlement trades one by one
+        let ins=0;
+        for(const[script,p]of Object.entries(pos)){
+          const price=parseFloat(sMap[script].rate);
+          const exch=p.exch||"NSE";
+          if(p.b>0.001){
+            const{error:e1}=await sb.from("trades").insert({
+              id:uid(),trader_id:trader.id,week_id:settlWeek.id,
+              trade_date:"Settlement",action:"SELL",qty:p.b,price,
+              vol:Math.round(p.b*price*100)/100,script,
+              type:"FORWARD",exchange:exch,is_settlement:true,sort_order:999998
+            });
+            if(e1)slog.push("ERR:"+trader.name+script+"BUY:"+e1.message);
+            else ins++;
           }
-          // Close SELL side with BUY FORWARD
-          if(pos.sellQty>0.001){
-            st.push({id:uid(),trader_id:trader.id,week_id:settlWeek.id,
-              trade_date:"Settlement",action:"BUY",qty:pos.sellQty,price,
-              vol:pos.sellQty*price,script,type:"FORWARD",exchange:sRate.exchange,
-              is_settlement:true,sort_order:999999});
+          if(p.s>0.001){
+            const{error:e2}=await sb.from("trades").insert({
+              id:uid(),trader_id:trader.id,week_id:settlWeek.id,
+              trade_date:"Settlement",action:"BUY",qty:p.s,price,
+              vol:Math.round(p.s*price*100)/100,script,
+              type:"FORWARD",exchange:exch,is_settlement:true,sort_order:999999
+            });
+            if(e2)slog.push("ERR:"+trader.name+script+"SELL:"+e2.message);
+            else ins++;
           }
         }
-        if(st.length){await sb.from("trades").insert(st);settledCount++;}
+        if(ins>0){settledCount++;totalTrades+=ins;}
+        slog.push(trader.name+":inserted "+ins);
       }
-      // Mark week settled
+
+      // Step 8: Mark week settled
       await sb.from("weeks").update({status:"settled"}).eq("id",settlWeek.id);
       await loadWeeks();
-      setSettlMsg(`✅ Settled! ${settledCount} traders got settlement trades. Go to Bills tab to view & download.`);
-      // Reload current trader trades if viewing this week
-      if(selWeek?.id===settlWeek.id&&selTrader)await loadTrades(selTrader.id,settlWeek.id);
-    }catch(e){setSettlMsg("❌ Error: "+e.message);}
+
+      const resultMsg=settledCount>0
+        ? `✅ Done! ${settledCount} traders · ${totalTrades} settlement trades created`
+        : "⚠️ 0 traders settled — make sure traders have NORMAL trades saved for this week first";
+      setSettlMsg(resultMsg);
+      console.log("Settlement log:", slog);
+
+      // Step 9: Load bills
+      const fw={...settlWeek,status:"settled"};
+      setBW(fw);
+      setTimeout(()=>loadBillsRef.current(fw),500);
+      if(selWeekRef.current?.id===settlWeek.id&&selTraderRef.current){
+        loadTrades(selTraderRef.current.id,settlWeek.id);
+      }
+    }catch(e){
+      setSettlMsg("❌ Error: "+e.message);
+      console.error("Settlement crashed:",e);
+    }
     setSettlLoad(false);
   };
 
@@ -650,7 +798,7 @@ function App(){
   );
 
   const isAdmin=currentUser.role==="ADMIN";
-  const TABS=isAdmin?["Traders","Entry","Settlement","Bills","Users"]:["Entry","Bills"];
+  const TABS=isAdmin?["Traders","Entry","TradeList","Settlement","Bills","Users"]:["Entry","TradeList","Bills"];
 
   return (
     <div style={{minHeight:"100vh",background:"#070d1a"}}>
@@ -695,7 +843,7 @@ function App(){
         {TABS.map(t=>(
           <button key={t} className={`tb ${tab===t?"ta":""}`} onClick={()=>setTab(t)}
             style={{background:"transparent",border:"none",borderBottom:"2px solid transparent",color:tab===t?"white":"#64748b",padding:"13px 16px",fontSize:13,fontWeight:600,cursor:"pointer",transition:"all 0.2s",whiteSpace:"nowrap"}}>
-            {t==="Traders"?"🧑‍💼 Traders":t==="Entry"?"📋 Entry":t==="Settlement"?"⚖️ Settlement":t==="Bills"?"🧾 Bills":"👥 Users"}
+            {t==="Traders"?"🧑‍💼 Traders":t==="Entry"?"📋 Entry":t==="TradeList"?"📃 Trade List":t==="Settlement"?"⚖️ Settlement":t==="Bills"?"🧾 Bills":"👥 Users"}
           </button>
         ))}
       </div>
@@ -880,6 +1028,185 @@ function App(){
           </div>
         )}
 
+        {/* ════════ TRADE LIST TAB ════════ */}
+        {tab==="TradeList"&&(
+          <div>
+            {/* Header controls */}
+            <div style={{display:"flex",gap:10,marginBottom:16,alignItems:"center",flexWrap:"wrap",background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 14px"}}>
+              <span style={{fontSize:12,color:"#94a3b8",fontWeight:700,whiteSpace:"nowrap"}}>📅 Select Week:</span>
+              <select value={tlWeek?.id||""} onChange={e=>{const w=weeks.find(x=>x.id===e.target.value);setTlWeek(w||null);setTlData([]);}} style={{...inpLg,color:"#a5b4fc",fontWeight:700,flex:1,minWidth:200}}>
+                <option value="">-- Select Week --</option>
+                {weeks.map(w=><option key={w.id} value={w.id}>{w.label}{w.status==="settled"?" ✓ Settled":""}</option>)}
+              </select>
+              {tlWeek&&<button onClick={()=>loadTradeListRef.current(tlWeek)} style={{...btn("rgba(99,102,241,0.15)","#a5b4fc"),border:"1px solid rgba(99,102,241,0.3)",fontSize:12,padding:"8px 12px"}}>🔄 Refresh</button>}
+              {tlLoad&&<Spin s={20}/>}
+              {tlWeek&&tlData.length>0&&(
+                <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                  <button onClick={()=>setTlExpanded(()=>{const e={};tlData.forEach(r=>{e[r.trader.id]=true;});return e;})} style={{...btn("rgba(255,255,255,0.07)","#94a3b8"),border:"1px solid rgba(255,255,255,0.1)",fontSize:11,padding:"6px 12px"}}>Expand All</button>
+                  <button onClick={()=>setTlExpanded({})} style={{...btn("rgba(255,255,255,0.07)","#94a3b8"),border:"1px solid rgba(255,255,255,0.1)",fontSize:11,padding:"6px 12px"}}>Collapse All</button>
+                  <button onClick={async()=>{
+                    // Save ALL traders at once
+                    for(const row of tlData){
+                      await tlSaveTrader(row.trader.id,tlWeek.id,row.trades);
+                    }
+                  }} style={{...btn("linear-gradient(135deg,#059669,#047857)"),fontSize:12,padding:"8px 18px",display:"flex",alignItems:"center",gap:6}}>
+                    💾 Save All Traders
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {!tlWeek?(
+              <div style={{textAlign:"center",padding:"60px 20px",background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14}}>
+                <div style={{fontSize:36,marginBottom:12}}>📃</div>
+                <div style={{color:"#475569",fontSize:15}}>Select a week to view & edit all traders' trades</div>
+              </div>
+            ):tlData.length===0&&!tlLoad?(
+              <div style={{textAlign:"center",padding:"40px 20px",background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,color:"#475569"}}>No traders found</div>
+            ):(
+              <div>
+                {/* Summary row */}
+                {(()=>{
+                  const allTr=tlData.flatMap(r=>r.trades);
+                  const norm=allTr.filter(t=>(t.type||"").toUpperCase()==="NORMAL");
+                  const fwd=allTr.filter(t=>(t.type||"").toUpperCase()==="FORWARD");
+                  return(
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:16}}>
+                      {[
+                        {l:"Traders",v:tlData.length,fc:"#a5b4fc",cnt:true},
+                        {l:"Total Trades",v:allTr.length,fc:"#e2e8f0",cnt:true},
+                        {l:"Normal",v:norm.length,fc:"#60a5fa",cnt:true},
+                        {l:"Forward",v:fwd.length,fc:"#c084fc",cnt:true},
+                        {l:"Scripts",v:[...new Set(allTr.map(t=>t.script).filter(Boolean))].length,fc:"#fbbf24",cnt:true},
+                      ].map(c=>(
+                        <div key={c.l} style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"10px 14px",textAlign:"center"}}>
+                          <div style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1,marginBottom:3}}>{c.l}</div>
+                          <div style={{fontSize:18,fontWeight:800,color:c.fc}}>{c.v}</div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
+                {/* Per-trader expandable rows */}
+                {tlData.map(row=>{
+                  const isExp=tlExpanded[row.trader.id]||false;
+                  const normalCount=row.trades.filter(t=>(t.type||"").toUpperCase()==="NORMAL").length;
+                  const fwdCount=row.trades.filter(t=>(t.type||"").toUpperCase()==="FORWARD").length;
+                  const nr=row.trader.nse_rate||DEF_NSE;
+                  const mm=makeMcxMap(row.trader.mcx_scripts?.length?row.trader.mcx_scripts:DEF_MCX);
+                  const rep=buildReport(row.trades,nr,mm);
+                  const net=rep.reduce((s,r)=>s+r.net,0);
+                  const saving=tlSaving[row.trader.id]||false;
+                  const msg=tlMsg[row.trader.id]||"";
+                  return(
+                    <div key={row.trader.id} style={{marginBottom:12,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:14,overflow:"hidden"}}>
+                      {/* Trader header row — click to expand */}
+                      <div onClick={()=>setTlExpanded(p=>({...p,[row.trader.id]:!p[row.trader.id]}))}
+                        style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:"linear-gradient(90deg,rgba(30,58,138,0.6),rgba(37,99,235,0.2))",cursor:"pointer",flexWrap:"wrap",userSelect:"none"}}>
+                        <span style={{fontSize:16,transition:"transform 0.2s",display:"inline-block",transform:isExp?"rotate(90deg)":"rotate(0deg)"}}>▶</span>
+                        <div style={{width:36,height:36,background:"linear-gradient(135deg,#0369a1,#0284c7)",borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>🧑‍💼</div>
+                        <div style={{flex:1,minWidth:120}}>
+                          <div style={{fontWeight:800,color:"white",fontSize:15}}>{row.trader.name}</div>
+                          <div style={{fontSize:11,color:"#64748b"}}>
+                            {row.trades.length} trades · Normal:{normalCount} · Fwd:{fwdCount}
+                            {row.trader.phone&&<span> · 📞{row.trader.phone}</span>}
+                          </div>
+                        </div>
+                        {/* Script badges */}
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                          {[...new Set(row.trades.map(t=>t.script).filter(Boolean))].slice(0,5).map(s=>(
+                            <span key={s} style={{background:"rgba(251,191,36,0.15)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:5,padding:"2px 8px",fontSize:11,color:"#fbbf24",fontWeight:700}}>{s}</span>
+                          ))}
+                          {[...new Set(row.trades.map(t=>t.script).filter(Boolean))].length>5&&
+                            <span style={{color:"#475569",fontSize:11}}>+{[...new Set(row.trades.map(t=>t.script).filter(Boolean))].length-5} more</span>}
+                        </div>
+                        <div style={{textAlign:"right",marginLeft:"auto"}}>
+                          <div style={{fontSize:10,color:"#64748b"}}>Net P&L</div>
+                          <div style={{fontSize:16,fontWeight:800,color:net>=0?"#4ade80":"#f87171"}}>₹{fmt(net)}</div>
+                        </div>
+                        {/* Save button visible on hover */}
+                        <button onClick={e=>{e.stopPropagation();tlSaveTrader(row.trader.id,tlWeek.id,row.trades);}}
+                          disabled={saving}
+                          style={{...btn("rgba(22,163,74,0.15)","#4ade80"),border:"1px solid rgba(22,163,74,0.3)",fontSize:11,padding:"5px 12px",display:"flex",alignItems:"center",gap:5,opacity:saving?0.6:1}}
+                          onClick={e=>{e.stopPropagation();tlSaveTrader(row.trader.id,tlWeek.id,row.trades);}}>
+                          {saving?<><Spin s={11} c="#4ade80"/><span>Saving...</span></>:"💾 Save"}
+                        </button>
+                        {msg&&<span style={{fontSize:11,color:msg.startsWith("✓")?"#4ade80":"#f87171",fontWeight:700}}>{msg}</span>}
+                      </div>
+
+                      {/* Expandable trade table */}
+                      {isExp&&(
+                        <div>
+                          <div className="ew">
+                            <div className="eh" style={{background:"rgba(99,102,241,0.1)",borderBottom:"1px solid rgba(99,102,241,0.15)"}}>
+                              <div style={{color:"#a5b4fc",fontSize:10,fontWeight:700}}>#</div>
+                              {["Date","Action","Qty","Price ₹","Vol (Auto)","Script","Type","Exch",""].map(h=>(
+                                <div key={h} style={{color:"#a5b4fc",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:0.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h}</div>
+                              ))}
+                            </div>
+                            {row.trades.map((t,idx)=>(
+                              <div key={t.id} className="eg" style={{borderBottom:"1px solid rgba(255,255,255,0.03)",background:t.type==="FORWARD"?"rgba(168,85,247,0.04)":idx%2===0?"transparent":"rgba(255,255,255,0.01)"}}>
+                                <div style={{fontSize:10,color:"#334155",textAlign:"center"}}>{idx+1}</div>
+                                <input type="text" placeholder="DD/MM/YYYY" value={t.trade_date}
+                                  onChange={e=>tlUpdateTrade(row.trader.id,t.id,"trade_date",e.target.value)} style={inp}/>
+                                <select value={t.action||"BUY"} onChange={e=>tlUpdateTrade(row.trader.id,t.id,"action",e.target.value)}
+                                  style={sl((t.action||"BUY")==="BUY"?"rgba(22,163,74,0.3)":"rgba(220,38,38,0.3)")}>
+                                  <option>BUY</option><option>SELL</option>
+                                </select>
+                                <input type="number" placeholder="0" value={t.qty}
+                                  onChange={e=>tlUpdateTrade(row.trader.id,t.id,"qty",e.target.value)} style={{...inp,color:"#fde68a"}}/>
+                                <input type="number" placeholder="0.00" step="0.01" value={t.price}
+                                  onChange={e=>tlUpdateTrade(row.trader.id,t.id,"price",e.target.value)} style={{...inp,color:"#fde68a"}}/>
+                                <div style={{background:"rgba(99,102,241,0.1)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:5,padding:"5px 7px",fontSize:11,color:"#a5b4fc",fontWeight:700,minHeight:30,display:"flex",alignItems:"center",overflow:"hidden"}}>
+                                  {t.vol?`₹ ${Number(t.vol).toLocaleString("en-IN")}`:<span style={{color:"rgba(148,163,184,0.25)",fontSize:10}}>Auto</span>}
+                                </div>
+                                <input type="text" placeholder="SCRIPT" value={t.script||""}
+                                  onChange={e=>tlUpdateTrade(row.trader.id,t.id,"script",e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""))}
+                                  style={{...inp,color:"#fbbf24",fontWeight:700}}/>
+                                <select value={t.type||"NORMAL"} onChange={e=>tlUpdateTrade(row.trader.id,t.id,"type",e.target.value)}
+                                  style={sl((t.type||"NORMAL")==="FORWARD"?"rgba(168,85,247,0.25)":"rgba(255,255,255,0.06)")}>
+                                  <option>NORMAL</option><option>FORWARD</option>
+                                </select>
+                                <select value={t.exchange||"NSE"} onChange={e=>tlUpdateTrade(row.trader.id,t.id,"exchange",e.target.value)}
+                                  style={sl((t.exchange||"NSE")==="MCX"?"rgba(234,179,8,0.25)":"rgba(59,130,246,0.25)")}>
+                                  <option>NSE</option><option>MCX</option>
+                                </select>
+                                <div style={{display:"flex",alignItems:"center",justifyContent:"center"}}>
+                                  <button className="dl" onClick={()=>tlRemoveRow(row.trader.id,t.id)}
+                                    disabled={row.trades.length===1&&!t.script&&!t.trade_date}
+                                    style={{...btn("rgba(220,38,38,0.08)","#f87171"),border:"1px solid rgba(220,38,38,0.2)",width:26,height:26,padding:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,opacity:(row.trades.length===1&&!t.script)?0.3:1}}>✕</button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          {/* Footer: add row + save + p&l */}
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"rgba(0,0,0,0.2)",borderTop:"1px solid rgba(255,255,255,0.04)",flexWrap:"wrap",gap:8}}>
+                            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                              <button onClick={()=>tlAddNewRow(row.trader.id)}
+                                style={{...btn("#4f46e5"),fontSize:12,padding:"7px 14px"}}>+ Add Row</button>
+                              <div style={{display:"flex",gap:14,fontSize:12}}>
+                                <span style={{color:"#94a3b8"}}>Gross: <strong style={{color:"#e2e8f0"}}>₹{fmt(rep.reduce((s,r)=>s+r.gross,0))}</strong></span>
+                                <span style={{color:"#94a3b8"}}>Brk: <strong style={{color:"#fbbf24"}}>₹{fmt(rep.reduce((s,r)=>s+r.totalBrk,0))}</strong></span>
+                                <strong style={{color:net>=0?"#4ade80":"#f87171"}}>Net: ₹{fmt(net)}</strong>
+                              </div>
+                            </div>
+                            <button onClick={()=>tlSaveTrader(row.trader.id,tlWeek.id,row.trades)}
+                              disabled={saving}
+                              style={{...btn("linear-gradient(135deg,#059669,#047857)"),fontSize:12,padding:"8px 18px",display:"flex",alignItems:"center",gap:6}}>
+                              {saving?<><Spin s={13} c="white"/><span>Saving...</span></>:"💾 Save Trader"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ════════ SETTLEMENT TAB ════════ */}
         {tab==="Settlement"&&(
           <div>
@@ -958,7 +1285,7 @@ function App(){
                 {settlMsg&&(
                   <div style={{margin:"0 16px 16px",padding:"12px 16px",background:settlMsg.startsWith("✅")?"rgba(22,163,74,0.1)":"rgba(220,38,38,0.1)",border:`1px solid ${settlMsg.startsWith("✅")?"rgba(22,163,74,0.3)":"rgba(220,38,38,0.3)"}`,borderRadius:8,fontSize:13,color:settlMsg.startsWith("✅")?"#4ade80":"#f87171"}}>
                     {settlMsg}
-                    {settlMsg.startsWith("✅")&&<span style={{marginLeft:16,color:"#60a5fa",cursor:"pointer",textDecoration:"underline"}} onClick={()=>{setBW(settlWeek);setTab("Bills");}}>→ Go to Bills</span>}
+                    {settlMsg.startsWith("✅")&&<button onClick={()=>{setBW({...settlWeek,status:"settled"});setTab("Bills");setTimeout(()=>loadBillsRef.current({...settlWeek,status:"settled"}),200);}} style={{marginLeft:12,background:"rgba(59,130,246,0.15)",border:"1px solid rgba(59,130,246,0.3)",borderRadius:7,color:"#60a5fa",padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>→ View Bills</button>}
                   </div>
                 )}
               </div>
@@ -977,7 +1304,7 @@ function App(){
               </select>
               <button onClick={()=>setPT(p=>p==="dark"?"light":"dark")} style={{background:pdfTheme==="dark"?"#0f172a":"#f0f4f8",border:`2px solid ${pdfTheme==="dark"?"#6366f1":"#2563eb"}`,borderRadius:20,padding:"5px 14px",fontSize:11,fontWeight:700,cursor:"pointer",color:pdfTheme==="dark"?"white":"#1e293b"}}>{pdfTheme==="dark"?"🌑 Dark":"☀️ Light"}</button>
               {billsWeek&&(
-                <button onClick={()=>loadBills(billsWeek)} style={{...btn("rgba(99,102,241,0.15)","#a5b4fc"),border:"1px solid rgba(99,102,241,0.3)",fontSize:12,padding:"8px 12px"}}>🔄 Refresh</button>
+                <button onClick={()=>loadBillsRef.current(billsWeek)} style={{...btn("rgba(99,102,241,0.15)","#a5b4fc"),border:"1px solid rgba(99,102,241,0.3)",fontSize:12,padding:"8px 12px"}}>🔄 Refresh</button>
               )}
               {billsWeek&&billsData.length>0&&(
                 <button onClick={()=>{billsData.forEach(b=>generateBillPDF(b.trader.name,billsWeek.label,b.trades,b.trader,pdfTheme));}}
@@ -991,7 +1318,7 @@ function App(){
               <div style={{fontSize:32,marginBottom:12}}>📋</div>
               <div style={{color:"#475569",fontSize:15,marginBottom:8}}>No trades found for this week</div>
               <div style={{color:"#334155",fontSize:12}}>Make sure traders have trades entered in the <strong style={{color:"#6366f1"}}>Entry</strong> tab for this week, then run <strong style={{color:"#4ade80"}}>Settlement</strong></div>
-              <button onClick={()=>loadBills(billsWeek)} style={{marginTop:16,background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:8,color:"#a5b4fc",padding:"8px 18px",fontSize:13,fontWeight:600,cursor:"pointer"}}>🔄 Reload</button>
+              <button onClick={()=>loadBillsRef.current(billsWeek)} style={{marginTop:16,background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:8,color:"#a5b4fc",padding:"8px 18px",fontSize:13,fontWeight:600,cursor:"pointer"}}>🔄 Reload</button>
             </div>)
             :(
               <>
@@ -1255,7 +1582,7 @@ function App(){
                       await sb.from("trades").delete().eq("trader_id",editBill.trader.id).eq("week_id",billsWeek.id);
                       const ins=editBill.trades.map(t=>({id:t.id||uid(),trader_id:editBill.trader.id,week_id:billsWeek.id,trade_date:t.trade_date||"",action:t.action||"BUY",qty:parseFloat(t.qty)||0,price:parseFloat(t.price)||0,vol:parseFloat(t.vol)||0,script:(t.script||"").toUpperCase(),type:t.type||"NORMAL",exchange:t.exchange||"NSE",is_settlement:t.is_settlement||false,sort_order:t.sort_order||0}));
                       if(ins.length)await sb.from("trades").insert(ins);
-                      await loadBills(billsWeek);setEB(null);
+                      await loadBillsRef.current(billsWeek);setEB(null);
                     }} style={{...btn("linear-gradient(135deg,#059669,#047857)"),fontSize:13}}>💾 Save Changes</button>
                   </div>
                 </div>
