@@ -44,7 +44,7 @@ const sb = (SUPABASE_URL.includes("supabase.co") && SUPABASE_ANON_KEY.startsWith
   ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 // ── CONSTANTS ──
-const uid = () => crypto.randomUUID();
+const uid  = () => Math.random().toString(36).slice(2);
 const fmt  = (n) => n==null||isNaN(n)?"—":Number(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 const DEF_NSE  = 3000;
 const DEF_MCX  = [
@@ -52,7 +52,10 @@ const DEF_MCX  = [
   {script:"SILVER",lotQty:30,rate:25},{script:"COPPER",lotQty:2500,rate:20},
   {script:"NATURALGAS",lotQty:1250,rate:35},
 ];
-const blank = () => ({id:uid(),trade_date:"",action:"BUY",qty:"",price:"",vol:"",script:"",type:"NORMAL",exchange:"NSE",is_settlement:false,sort_order:Date.now()});
+// sortOrd: small integer safe for DB integer column (row index based)
+let _sortCtr=1;
+const sortOrd=()=>{ _sortCtr++;return _sortCtr%2000000; };
+const blank = () => ({id:uid(),trade_date:"",action:"BUY",qty:"",price:"",vol:"",script:"",type:"NORMAL",exchange:"NSE",is_settlement:false,sort_order:sortOrd()});
 
 // ── BROKERAGE ──
 function makeMcxMap(scripts){ const m={}; (scripts||[]).forEach(s=>{m[s.script.toUpperCase()]=s;}); return m; }
@@ -418,7 +421,7 @@ function App(){
       if(de)throw de;
       const valid=tradesArr.filter(t=>t.script||t.trade_date);
       if(valid.length){
-        const ins=valid.map(t=>({
+        const ins=valid.map((t,idx)=>({
           id:t.id,trader_id:traderId,week_id:weekId,
           trade_date:t.trade_date||"",action:(t.action||"BUY").toUpperCase(),
           qty:parseFloat(t.qty)||0,price:parseFloat(t.price)||0,
@@ -426,7 +429,7 @@ function App(){
           script:(t.script||"").toUpperCase(),
           type:(t.type||"NORMAL").toUpperCase(),
           exchange:(t.exchange||"NSE").toUpperCase(),
-          is_settlement:false,sort_order:t.sort_order||Date.now()
+          is_settlement:false,sort_order:idx+1
         }));
         const{error:ie}=await sb.from("trades").insert(ins);
         if(ie)throw ie;
@@ -457,7 +460,7 @@ function App(){
     }));
   };
   const tlAddNewRow=(traderId)=>{
-    const newRow={...blank(),sort_order:Date.now()};
+    const newRow={...blank(),sort_order:sortOrd()};
     setTlData(prev=>prev.map(row=>
       row.trader.id===traderId?{...row,trades:[...row.trades,newRow]}:row
     ));
@@ -524,7 +527,7 @@ function App(){
     if(!selTrader||!selWeek){return;}
     setMSaving(true);
     if(saveTimer.current)clearTimeout(saveTimer.current);
-    await doSaveRef.current(selTrader.id,selWeek.id,[...trades],true);
+    await doSaveRef.current(selTrader.id,selWeek.id,[...tradesRef.current],true);
     setMSaving(false);
   };
 
@@ -609,7 +612,7 @@ function App(){
       return up;
     }));
   };
-  const addTrade=()=>setTrades(p=>[...p,{...blank(),sort_order:Date.now()}]);
+  const addTrade=()=>setTrades(p=>[...p,{...blank(),sort_order:sortOrd()}]);
   const remTrade=(id)=>setTrades(p=>p.filter(r=>r.id!==id));
   const markFwd=()=>{setTrades(p=>p.map(t=>selRows.has(t.id)?{...t,type:"FORWARD"}:t));setSelRows(new Set());};
   const markNorm=()=>{setTrades(p=>p.map(t=>selRows.has(t.id)?{...t,type:"NORMAL"}:t));setSelRows(new Set());};
@@ -630,7 +633,7 @@ function App(){
         return{id:uid(),trade_date:R["DATE"]||"",action:(R["ACTION"]||R["BUY/SELL"]||"BUY").toUpperCase(),
           qty,price,vol,script:(R["SCRIPT"]||R["SYMBOL"]||"").toUpperCase().replace(/[^A-Z0-9]/g,""),
           type:(R["TYPE"]||"NORMAL").toUpperCase(),exchange:(R["EXCHANGE"]||"NSE").toUpperCase(),
-          is_settlement:false,sort_order:Date.now()+i};
+          is_settlement:false,sort_order:sortOrd()};
       });
       setXP(mapped);setShXP(true);
     };
@@ -639,8 +642,8 @@ function App(){
 
   const confirmImport=async(andSave=false)=>{
     const base=tradesRef.current.filter(t=>t.script||t.trade_date);
-    const maxO=base.reduce((m,t)=>Math.max(m,t.sort_order||0),0);
-    const merged=[...base,...xlPrev.map((t,i)=>({...t,sort_order:maxO+i+1000}))];
+    const maxO=Math.min(base.reduce((m,t)=>Math.max(m,t.sort_order||0),0),1900000);
+    const merged=[...base,...xlPrev.map((t,i)=>({...t,sort_order:Math.min(maxO+i+10,1999990)}))];
     setTrades(merged);setShXP(false);setXP(null);
     if(andSave&&selTraderRef.current&&selWeekRef.current){
       if(saveTimer.current)clearTimeout(saveTimer.current);
@@ -1580,7 +1583,7 @@ function App(){
                   <div style={{marginLeft:"auto"}}>
                     <button onClick={async()=>{
                       await sb.from("trades").delete().eq("trader_id",editBill.trader.id).eq("week_id",billsWeek.id);
-                      const ins=editBill.trades.map(t=>({id:t.id||uid(),trader_id:editBill.trader.id,week_id:billsWeek.id,trade_date:t.trade_date||"",action:t.action||"BUY",qty:parseFloat(t.qty)||0,price:parseFloat(t.price)||0,vol:parseFloat(t.vol)||0,script:(t.script||"").toUpperCase(),type:t.type||"NORMAL",exchange:t.exchange||"NSE",is_settlement:t.is_settlement||false,sort_order:t.sort_order||0}));
+                      const ins=editBill.trades.map((t,idx)=>({id:t.id||uid(),trader_id:editBill.trader.id,week_id:billsWeek.id,trade_date:t.trade_date||"",action:t.action||"BUY",qty:parseFloat(t.qty)||0,price:parseFloat(t.price)||0,vol:parseFloat(t.vol)||0,script:(t.script||"").toUpperCase(),type:t.type||"NORMAL",exchange:t.exchange||"NSE",is_settlement:t.is_settlement||false,sort_order:idx+1}));
                       if(ins.length)await sb.from("trades").insert(ins);
                       await loadBillsRef.current(billsWeek);setEB(null);
                     }} style={{...btn("linear-gradient(135deg,#059669,#047857)"),fontSize:13}}>💾 Save Changes</button>
