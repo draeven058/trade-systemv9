@@ -524,11 +524,11 @@ function App(){
 
   useEffect(()=>{
     if(!currentUser||!selTrader||!selWeek||tradesLoad)return;
-    if(.current)clearTimeout(.current);
+    if(saveTimer.current)clearTimeout(saveTimer.current);
     // Capture current values in closure for timer
     const tid=selTrader.id, wid=selWeek.id, tArr=[...trades];
-    .current=setTimeout(()=>doSaveRef.current(tid,wid,tArr,true),1500);
-    return()=>clearTimeout(.current);
+    saveTimer.current=setTimeout(()=>doSaveRef.current(tid,wid,tArr,true),1500);
+    return()=>clearTimeout(saveTimer.current);
   },[trades,currentUser,selTrader,selWeek,tradesLoad]);
 
   const manualSave=async()=>{
