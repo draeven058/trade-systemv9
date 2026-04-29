@@ -32,7 +32,6 @@ select option{background:#1e293b;color:white}
 <body>
 <div id="root"></div>
 
-<!-- ══ REPLACE THESE TWO VALUES ══ -->
 <script>
 const SUPABASE_URL      = "https://wfvcshudanvvbdfwlapf.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndmdmNzaHVkYW52dmJkZndsYXBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4OTkwMDAsImV4cCI6MjA5MTQ3NTAwMH0.P6TBJJtSq7YnYzNOTV8dZ9-SnvbGKSFuNEOjYyrf-dc";
@@ -43,7 +42,6 @@ const { useState, useMemo, useRef, useEffect, useCallback } = React;
 const sb = (SUPABASE_URL.includes("supabase.co") && SUPABASE_ANON_KEY.startsWith("eyJ"))
   ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
-// ── CONSTANTS ──
 const uid  = () => Math.random().toString(36).slice(2);
 const fmt  = (n) => n==null||isNaN(n)?"—":Number(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 const DEF_NSE  = 3000;
@@ -52,12 +50,10 @@ const DEF_MCX  = [
   {script:"SILVER",lotQty:30,rate:25},{script:"COPPER",lotQty:2500,rate:20},
   {script:"NATURALGAS",lotQty:1250,rate:35},
 ];
-// sortOrd: small integer safe for DB integer column (row index based)
 let _sortCtr=1;
 const sortOrd=()=>{ _sortCtr++;return _sortCtr%2000000; };
 const blank = () => ({id:uid(),trade_date:"",action:"BUY",qty:"",price:"",vol:"",script:"",type:"NORMAL",exchange:"NSE",is_settlement:false,sort_order:sortOrd()});
 
-// ── BROKERAGE ──
 function makeMcxMap(scripts){ const m={}; (scripts||[]).forEach(s=>{m[s.script.toUpperCase()]=s;}); return m; }
 
 function calcBrk(t, nseRate, mcxMap){
@@ -85,7 +81,6 @@ function buildReport(tradesList, nseRate, mcxMap){
   });
 }
 
-// ── PDF BILL ──
 function generateBillPDF(traderName, weekLabel, tradesList, trader, pdfTheme){
   const nseRate = trader?.nse_rate || DEF_NSE;
   const mcxMap  = makeMcxMap(trader?.mcx_scripts?.length ? trader.mcx_scripts : DEF_MCX);
@@ -103,9 +98,9 @@ function generateBillPDF(traderName, weekLabel, tradesList, trader, pdfTheme){
     <td style="padding:7px 10px;color:${txt}">${t.trade_date}</td>
     <td style="padding:7px 10px"><span style="background:${t.action==="BUY"?"rgba(22,163,74,0.15)":"rgba(220,38,38,0.15)"};color:${t.action==="BUY"?green:red};padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">${t.action}</span></td>
     <td style="padding:7px 10px;color:${D?"#fde68a":"#92400e"}">${t.qty}</td>
-    <td style="padding:7px 10px;color:${D?"#fde68a":"#92400e"}">₹${t.price}</td>
-    <td style="padding:7px 10px;font-weight:600;color:${txt}">₹${fmt(parseFloat(t.vol))}</td>
-    <td style="padding:7px 10px;font-weight:700;color:${gold}">₹${fmt(calcBrk(t,nseRate,mcxMap))}</td>
+    <td style="padding:7px 10px;color:${D?"#fde68a":"#92400e"}">&#8377;${t.price}</td>
+    <td style="padding:7px 10px;font-weight:600;color:${txt}">&#8377;${fmt(parseFloat(t.vol))}</td>
+    <td style="padding:7px 10px;font-weight:700;color:${gold}">&#8377;${fmt(calcBrk(t,nseRate,mcxMap))}</td>
     <td style="padding:7px 10px"><span style="background:${t.type==="FORWARD"?"rgba(168,85,247,0.15)":"rgba(99,102,241,0.1)"};color:${t.type==="FORWARD"?"#9333ea":"#6366f1"};padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">${t.type}${t.is_settlement?" ⚖️":""}</span></td>
   </tr>`;
   const blocks=report.map(g=>{
@@ -115,7 +110,7 @@ function generateBillPDF(traderName, weekLabel, tradesList, trader, pdfTheme){
         <span style="color:white;font-weight:800;font-size:14px">${g.script}</span>
         <div style="display:flex;gap:14px;align-items:center">
           <span style="background:rgba(255,255,255,0.2);color:white;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700">${g.exchange}</span>
-          <span style="color:${g.net>=0?"#4ade80":"#f87171"};font-weight:800;font-size:13px">Net: ₹${fmt(g.net)}</span>
+          <span style="color:${g.net>=0?"#4ade80":"#f87171"};font-weight:800;font-size:13px">Net: &#8377;${fmt(g.net)}</span>
         </div>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -130,8 +125,8 @@ function generateBillPDF(traderName, weekLabel, tradesList, trader, pdfTheme){
         </tr></thead>
         <tbody>${gT.map(trRow).join("")}</tbody>
         <tfoot>
-          <tr style="background:rgba(99,102,241,0.12)"><td colspan="4" style="padding:8px 10px;color:${txt};font-weight:700">Subtotal</td><td style="padding:8px 10px;font-weight:800">Buy:₹${fmt(g.buyVol)} | Sell:₹${fmt(g.sellVol)}</td><td style="padding:8px 10px;color:${gold};font-weight:800">₹${fmt(g.totalBrk)}</td><td></td></tr>
-          <tr style="background:rgba(99,102,241,0.06)"><td colspan="5" style="padding:8px 10px;color:${sub};font-size:11px">Gross: <strong style="color:${txt}">₹${fmt(g.gross)}</strong></td><td colspan="2" style="padding:8px 10px;font-weight:800;font-size:14px;color:${g.net>=0?green:red}">Net: ₹${fmt(g.net)} ${g.net>=0?"▲":"▼"}</td></tr>
+          <tr style="background:rgba(99,102,241,0.12)"><td colspan="4" style="padding:8px 10px;color:${txt};font-weight:700">Subtotal</td><td style="padding:8px 10px;font-weight:800">Buy:&#8377;${fmt(g.buyVol)} | Sell:&#8377;${fmt(g.sellVol)}</td><td style="padding:8px 10px;color:${gold};font-weight:800">&#8377;${fmt(g.totalBrk)}</td><td></td></tr>
+          <tr style="background:rgba(99,102,241,0.06)"><td colspan="5" style="padding:8px 10px;color:${sub};font-size:11px">Gross: <strong style="color:${txt}">&#8377;${fmt(g.gross)}</strong></td><td colspan="2" style="padding:8px 10px;font-weight:800;font-size:14px;color:${g.net>=0?green:red}">Net: &#8377;${fmt(g.net)} ${g.net>=0?"▲":"▼"}</td></tr>
         </tfoot>
       </table>
     </div>`;
@@ -140,9 +135,9 @@ function generateBillPDF(traderName, weekLabel, tradesList, trader, pdfTheme){
     <td style="padding:10px 14px"><span style="background:${g.exchange==="MCX"?"rgba(234,179,8,0.15)":"rgba(59,130,246,0.15)"};color:${g.exchange==="MCX"?gold:"#3b82f6"};border-radius:5px;padding:3px 10px;font-size:11px;font-weight:700">${g.exchange}</span></td>
     <td style="padding:10px 14px;font-weight:800;color:${txt}">${g.script}</td>
     <td style="padding:10px 14px;text-align:center;font-weight:700;color:#a5b4fc">${g.noOf}</td>
-    <td style="padding:10px 14px;font-weight:700;color:${g.gross>=0?green:red}">₹${fmt(g.gross)}</td>
-    <td style="padding:10px 14px;font-weight:700;color:${gold}">₹${fmt(g.totalBrk)}</td>
-    <td style="padding:10px 14px;font-weight:800;font-size:14px;color:${g.net>=0?green:red}">₹${fmt(g.net)}</td>
+    <td style="padding:10px 14px;font-weight:700;color:${g.gross>=0?green:red}">&#8377;${fmt(g.gross)}</td>
+    <td style="padding:10px 14px;font-weight:700;color:${gold}">&#8377;${fmt(g.totalBrk)}</td>
+    <td style="padding:10px 14px;font-weight:800;font-size:14px;color:${g.net>=0?green:red}">&#8377;${fmt(g.net)}</td>
   </tr>`).join("");
   const html=`<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Bill — ${traderName}</title>
   <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Segoe UI',Arial,sans-serif;background:${bg};padding:32px;color:${txt}}@media print{body{padding:0}}</style>
@@ -151,7 +146,7 @@ function generateBillPDF(traderName, weekLabel, tradesList, trader, pdfTheme){
     <h1 style="color:white;font-size:26px;font-weight:800;margin-bottom:8px">Trade Bill</h1>
     <div style="color:#bfdbfe;font-size:16px;margin-bottom:4px">Trader: <strong style="color:white;font-size:18px">${traderName}</strong></div>
     <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:8px;padding:5px 18px;margin:6px 0"><span style="color:#e0f2fe;font-size:13px;font-weight:600">📅 ${weekLabel}</span></div>
-    <div style="color:#93c5fd;font-size:12px;margin-top:6px">Generated: ${new Date().toLocaleString("en-IN")} · NSE Rate: ₹${nseRate}/Cr</div>
+    <div style="color:#93c5fd;font-size:12px;margin-top:6px">Generated: ${new Date().toLocaleString("en-IN")} · NSE Rate: &#8377;${nseRate}/Cr</div>
   </div>
   ${blocks}
   <div style="margin-top:32px;border:2px solid #1e3a8a;border-radius:12px;overflow:hidden">
@@ -166,15 +161,15 @@ function generateBillPDF(traderName, weekLabel, tradesList, trader, pdfTheme){
         <th style="padding:10px 14px;text-align:center;color:${tt};font-size:11px;text-transform:uppercase">Trades</th>
         <th style="padding:10px 14px;text-align:left;color:${tt};font-size:11px;text-transform:uppercase">Total Gross</th>
         <th style="padding:10px 14px;text-align:left;color:${tt};font-size:11px;text-transform:uppercase">Total Brk</th>
-        <th style="padding:10px 14px;text-align:left;color:${tt};font-size:11px;text-transform:uppercase">Net P&L</th>
+        <th style="padding:10px 14px;text-align:left;color:${tt};font-size:11px;text-transform:uppercase">Net P&amp;L</th>
       </tr></thead>
       <tbody>${sumRows}</tbody>
       <tfoot><tr style="background:#1e3a8a;border-top:2px solid #2563eb">
         <td colspan="2" style="padding:13px 14px;color:white;font-weight:800;font-size:14px">GRAND TOTAL</td>
         <td style="padding:13px 14px;text-align:center;color:#bfdbfe;font-weight:800">${tNoOf}</td>
-        <td style="padding:13px 14px;font-weight:800;font-size:15px;color:${tGross>=0?"#4ade80":"#f87171"}">₹${fmt(tGross)}</td>
-        <td style="padding:13px 14px;font-weight:800;font-size:15px;color:#fbbf24">₹${fmt(tBrk)}</td>
-        <td style="padding:13px 14px;font-weight:900;font-size:17px;color:${tNet>=0?"#4ade80":"#f87171"}">₹${fmt(tNet)}</td>
+        <td style="padding:13px 14px;font-weight:800;font-size:15px;color:${tGross>=0?"#4ade80":"#f87171"}">&#8377;${fmt(tGross)}</td>
+        <td style="padding:13px 14px;font-weight:800;font-size:15px;color:#fbbf24">&#8377;${fmt(tBrk)}</td>
+        <td style="padding:13px 14px;font-weight:900;font-size:17px;color:${tNet>=0?"#4ade80":"#f87171"}">&#8377;${fmt(tNet)}</td>
       </tr></tfoot>
     </table>
   </div>
@@ -189,9 +184,6 @@ function generateBillPDF(traderName, weekLabel, tradesList, trader, pdfTheme){
 
 const Spin=({s=18,c="#6366f1"})=><div style={{width:s,height:s,border:"2px solid rgba(255,255,255,0.15)",borderTopColor:c,borderRadius:"50%",animation:"spin 0.7s linear infinite",flexShrink:0}}/>;
 
-// ══════════════════════════════════
-// CONFIG CHECK
-// ══════════════════════════════════
 function ConfigError(){
   return <div style={{minHeight:"100vh",background:"#070d1a",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
     <div style={{background:"rgba(220,38,38,0.08)",border:"2px solid rgba(220,38,38,0.4)",borderRadius:20,padding:"40px 36px",width:"100%",maxWidth:540,textAlign:"center"}}>
@@ -207,75 +199,51 @@ function ConfigError(){
   </div>;
 }
 
-// ══════════════════════════════════
-// MAIN APP
-// ══════════════════════════════════
 function App(){
   if(!sb) return <ConfigError/>;
 
-  // ── Auth ──
   const [currentUser,setCU]=useState(null);
   const [loginForm,setLF]=useState({username:"",password:""});
   const [loginErr,setLE]=useState("");
   const [loginLoad,setLL]=useState(false);
-
-  // ── Nav ──
   const [tab,setTab]=useState("Traders");
-
-  // ── Traders ──
   const [traders,setTraders]=useState([]);
   const [tradersLoad,setTL]=useState(false);
   const [newTrader,setNT]=useState({name:"",phone:"",note:""});
   const [traderErr,setTE]=useState("");
   const [traderSearch,setTS]=useState("");
   const [selTrader,setST]=useState(null);
-
-  // ── Trader Settings Modal ──
-  const [traderSetModal,setTSM]=useState(null); // trader obj
+  const [traderSetModal,setTSM]=useState(null);
   const [tsmNse,setTsmNse]=useState(DEF_NSE);
   const [tsmMcx,setTsmMcx]=useState(DEF_MCX);
   const [tsmSaving,setTsmSaving]=useState(false);
   const [tsmMsg,setTsmMsg]=useState("");
-
-  // ── Weeks ──
   const [weeks,setWeeks]=useState([]);
   const [selWeek,setSW]=useState(null);
   const [showNewWeek,setShNW]=useState(false);
   const [newWeek,setNW]=useState({label:"",start_date:"",end_date:""});
   const [weekErr,setWE]=useState("");
-
-  // ── Trades ──
   const [trades,setTrades]=useState([]);
   const [tradesLoad,setTrLoad]=useState(false);
   const [saveStatus,setSS]=useState("");
   const [selRows,setSelRows]=useState(new Set());
   const [manualSaving,setMSaving]=useState(false);
-
-  // ── Settings ──
   const [pdfTheme,setPT]=useState("dark");
-
-  // ── Settlement ──
   const [settlRates,setSettlRates]=useState([]);
   const [settlLoad,setSettlLoad]=useState(false);
   const [settlMsg,setSettlMsg]=useState("");
   const [settlWeek,setSettlWk]=useState(null);
-
-  // ── Bills ──
   const [billsWeek,setBW]=useState(null);
   const [billsData,setBD]=useState([]);
   const [billsLoad,setBL]=useState(false);
   const [editBill,setEB]=useState(null);
-
-  // ── Trade List ──
   const [tlWeek,setTlWeek]=useState(null);
-  const [tlData,setTlData]=useState([]); // [{trader, trades, editingId}]
+  const [tlData,setTlData]=useState([]);
   const [tlLoad,setTlLoad]=useState(false);
-  const [tlSaving,setTlSaving]=useState({}); // {traderId: bool}
-  const [tlMsg,setTlMsg]=useState({});      // {traderId: msg}
-  const [tlAddRow,setTlAddRow]=useState({}); // per trader
-  const [tlExpanded,setTlExpanded]=useState({}); // {traderId: bool}
-
-  // ── Users (admin) ──
+  const [tlSaving,setTlSaving]=useState({});
+  const [tlMsg,setTlMsg]=useState({});
+  const [tlAddRow,setTlAddRow]=useState({});
+  const [tlExpanded,setTlExpanded]=useState({});
   const [users,setUsers]=useState([]);
   const [newUser,setNU]=useState({username:"",password:"",role:"USER",name:""});
   const [userErr,setUE]=useState("");
@@ -287,8 +255,6 @@ function App(){
   const [showSP,setShSP]=useState(false);
   const [spOld,setSPO]=useState(""); const [spNew,setSPN]=useState(""); const [spCnf,setSPC]=useState("");
   const [spErr,setSPE]=useState(""); const [spOk,setSPOK]=useState("");
-
-  // ── Excel ──
   const [xlPrev,setXP]=useState(null);
   const [showXP,setShXP]=useState(false);
   const fileRef=useRef();
@@ -297,34 +263,28 @@ function App(){
   const selTraderRef=useRef(selTrader);
   const selWeekRef=useRef(selWeek);
 
-  // ── Computed ──
   const traderNseRate = selTrader?.nse_rate || DEF_NSE;
   const traderMcxScripts = selTrader?.mcx_scripts?.length ? selTrader.mcx_scripts : DEF_MCX;
   const traderMcxMap = useMemo(()=>makeMcxMap(traderMcxScripts),[traderMcxScripts]);
-
   const report = useMemo(()=>buildReport(trades,traderNseRate,traderMcxMap),[trades,traderNseRate,traderMcxMap]);
   const tGross=report.reduce((s,r)=>s+r.gross,0);
   const tBrk=report.reduce((s,r)=>s+r.totalBrk,0);
   const tNet=report.reduce((s,r)=>s+r.net,0);
-
   const filteredTraders = useMemo(()=>{
     if(!traderSearch.trim()) return traders;
     return traders.filter(t=>t.name.toLowerCase().includes(traderSearch.toLowerCase()));
   },[traders,traderSearch]);
 
-  // ── Loaders ──
   const loadTraders=useCallback(async()=>{
     setTL(true);
     const{data}=await sb.from("traders").select("*").eq("active",true).order("name");
     if(data)setTraders(data);
     setTL(false);
   },[]);
-
   const loadWeeks=useCallback(async()=>{
     const{data}=await sb.from("weeks").select("*").order("created_at",{ascending:false});
     if(data)setWeeks(data);
   },[]);
-
   const loadTrades=useCallback(async(tId,wId)=>{
     if(!tId||!wId){setTrades([]);return;}
     setTrLoad(true);
@@ -332,15 +292,12 @@ function App(){
     setTrades(data?.length?data:[blank()]);
     setTrLoad(false);
   },[]);
-
   const loadUsers=useCallback(async()=>{
     const{data}=await sb.from("users").select("*").order("created_at");
     if(data)setUsers(data);
   },[]);
-
   const loadSettlRates=useCallback(async(weekId)=>{
     if(!weekId)return;
-    // Auto-detect distinct scripts from all traders' trades this week
     const{data:td}=await sb.from("trades").select("script,exchange").eq("week_id",weekId).eq("type","NORMAL");
     const{data:saved}=await sb.from("settlement_rates").select("*").eq("week_id",weekId);
     const savedMap={};
@@ -357,18 +314,15 @@ function App(){
 
   const loadBills=async(week)=>{
     if(!week){setBD([]);return;}
-    setBL(true);
-    setBD([]);
+    setBL(true);setBD([]);
     try{
       const weekId=week.id||week;
       const{data:allT,error:tErr}=await sb.from("traders").select("*").eq("active",true).order("name");
-      if(tErr||!allT?.length){console.log("No traders:",tErr);setBL(false);return;}
+      if(tErr||!allT?.length){setBL(false);return;}
       const results=[];
       for(const trader of allT){
-        const{data:td,error}=await sb.from("trades").select("*")
-          .eq("trader_id",trader.id).eq("week_id",weekId)
-          .order("sort_order");
-        if(error){console.error("Bill load err",trader.name,error);continue;}
+        const{data:td,error}=await sb.from("trades").select("*").eq("trader_id",trader.id).eq("week_id",weekId).order("sort_order");
+        if(error)continue;
         if(td&&td.length>0){
           const nr=parseFloat(trader.nse_rate)||DEF_NSE;
           const mm=makeMcxMap(trader.mcx_scripts?.length?trader.mcx_scripts:DEF_MCX);
@@ -377,7 +331,6 @@ function App(){
           results.push({trader,trades:td,report:rep,net});
         }
       }
-      console.log("Bills loaded: "+results.length+" traders for week "+weekId);
       setBD(results);
     }catch(e){console.error("loadBills crash:",e);}
     setBL(false);
@@ -385,7 +338,6 @@ function App(){
   const loadBillsRef=useRef(loadBills);
   useEffect(()=>{loadBillsRef.current=loadBills;});
 
-  // ── Load Trade List ──
   const loadTradeList=async(week)=>{
     if(!week){setTlData([]);return;}
     setTlLoad(true);setTlData([]);
@@ -394,17 +346,10 @@ function App(){
       if(!allT?.length){setTlLoad(false);return;}
       const results=[];
       for(const trader of allT){
-        const{data:td}=await sb.from("trades").select("*")
-          .eq("trader_id",trader.id).eq("week_id",week.id)
-          .order("sort_order");
-        results.push({
-          trader,
-          trades:td?.length?[...td]:[],
-          orig:td?.length?[...td]:[]
-        });
+        const{data:td}=await sb.from("trades").select("*").eq("trader_id",trader.id).eq("week_id",week.id).order("sort_order");
+        results.push({trader,trades:td?.length?[...td]:[],orig:td?.length?[...td]:[]});
       }
       setTlData(results);
-      // Auto-expand traders that have trades
       const exp={};
       results.forEach(r=>{if(r.trades.length>0)exp[r.trader.id]=true;});
       setTlExpanded(exp);
@@ -414,13 +359,11 @@ function App(){
   const loadTradeListRef=useRef(loadTradeList);
   useEffect(()=>{loadTradeListRef.current=loadTradeList;});
 
-  // Save a single trader's trades from trade list
   const tlSaveTrader=async(traderId,weekId,tradesArr)=>{
     setTlSaving(p=>({...p,[traderId]:true}));
     setTlMsg(p=>({...p,[traderId]:""}));
     try{
-      const{error:de}=await sb.from("trades").delete()
-        .eq("trader_id",traderId).eq("week_id",weekId).eq("is_settlement",false);
+      const{error:de}=await sb.from("trades").delete().eq("trader_id",traderId).eq("week_id",weekId).eq("is_settlement",false);
       if(de)throw de;
       const valid=tradesArr.filter(t=>t.script||t.trade_date);
       if(valid.length){
@@ -439,13 +382,10 @@ function App(){
       }
       setTlMsg(p=>({...p,[traderId]:"✓ Saved"}));
       setTimeout(()=>setTlMsg(p=>({...p,[traderId]:""})),2000);
-    }catch(e){
-      setTlMsg(p=>({...p,[traderId]:"❌ "+e.message}));
-    }
+    }catch(e){setTlMsg(p=>({...p,[traderId]:"❌ "+e.message}));}
     setTlSaving(p=>({...p,[traderId]:false}));
   };
 
-  // Update a trade inside tlData
   const tlUpdateTrade=(traderId,tradeId,field,val)=>{
     setTlData(prev=>prev.map(row=>{
       if(row.trader.id!==traderId)return row;
@@ -464,9 +404,7 @@ function App(){
   };
   const tlAddNewRow=(traderId)=>{
     const newRow={...blank(),sort_order:sortOrd()};
-    setTlData(prev=>prev.map(row=>
-      row.trader.id===traderId?{...row,trades:[...row.trades,newRow]}:row
-    ));
+    setTlData(prev=>prev.map(row=>row.trader.id===traderId?{...row,trades:[...row.trades,newRow]}:row));
   };
   const tlRemoveRow=(traderId,tradeId)=>{
     setTlData(prev=>prev.map(row=>{
@@ -483,20 +421,13 @@ function App(){
   useEffect(()=>{tradesRef.current=trades;},[trades]);
   useEffect(()=>{selTraderRef.current=selTrader;},[selTrader]);
   useEffect(()=>{selWeekRef.current=selWeek;},[selWeek]);
-
-
-  // Reload bills whenever Bills tab is opened
   useEffect(()=>{if(tab==="Bills"&&billsWeek)loadBillsRef.current(billsWeek);},[tab]);
 
-  // ── Auto-save ──
-  // doSave: saves trades to DB. Uses plain async function (not useCallback) to avoid stale closures
   const doSave = async(traderId,weekId,tradesArr,showStatus=true)=>{
     if(!traderId||!weekId)return false;
     if(showStatus)setSS("saving");
     try{
-      // Delete existing non-settlement trades, then reinsert
-      const{error:delErr}=await sb.from("trades").delete()
-        .eq("trader_id",traderId).eq("week_id",weekId).eq("is_settlement",false);
+      const{error:delErr}=await sb.from("trades").delete().eq("trader_id",traderId).eq("week_id",weekId).eq("is_settlement",false);
       if(delErr){console.error("Delete error:",delErr);if(showStatus){setSS("error");setTimeout(()=>setSS(""),2500);}return false;}
       const validTrades=tradesArr.filter(t=>t.script||t.trade_date);
       if(validTrades.length){
@@ -518,28 +449,26 @@ function App(){
       return false;
     }
   };
-  // Keep a ref to doSave for use in event handlers
   const doSaveRef=useRef(doSave);
   useEffect(()=>{doSaveRef.current=doSave;});
 
   useEffect(()=>{
     if(!currentUser||!selTrader||!selWeek||tradesLoad)return;
     if(saveTimer.current)clearTimeout(saveTimer.current);
-    // Capture current values in closure for timer
     const tid=selTrader.id, wid=selWeek.id, tArr=[...trades];
     saveTimer.current=setTimeout(()=>doSaveRef.current(tid,wid,tArr,true),1500);
     return()=>clearTimeout(saveTimer.current);
   },[trades,currentUser,selTrader,selWeek,tradesLoad]);
 
+  // ✅ FIX 1: manualSave — saveTimer.current restored
   const manualSave=async()=>{
     if(!selTrader||!selWeek){return;}
     setMSaving(true);
-    if(.current)clearTimeout(.current);
+    if(saveTimer.current)clearTimeout(saveTimer.current);
     await doSaveRef.current(selTrader.id,selWeek.id,[...tradesRef.current],true);
     setMSaving(false);
   };
 
-  // ── Login ──
   const handleLogin=async()=>{
     setLE(""); const u=loginForm.username.trim().toLowerCase(),p=loginForm.password.trim();
     if(!u||!p){setLE("Enter username and password");return;}
@@ -553,11 +482,9 @@ function App(){
     setLL(false);
   };
 
-  // ── Traders CRUD ──
   const createTrader=async()=>{
     const nm=newTrader.name.trim();
     if(!nm){setTE("Name required");return;}
-    // Case-insensitive duplicate check
     const dup=traders.find(t=>t.name.toLowerCase()===nm.toLowerCase());
     if(dup){setTE(`Trader "${dup.name}" already exists`);return;}
     const{error}=await sb.from("traders").insert({name:nm,phone:newTrader.phone.trim(),note:newTrader.note.trim(),created_by:currentUser.username,active:true,nse_rate:DEF_NSE,mcx_scripts:[]});
@@ -571,7 +498,6 @@ function App(){
     await loadTraders();
   };
 
-  // ── Trader Settings Modal ──
   const openTraderSettings=(trader)=>{
     setTSM(trader);
     setTsmNse(trader.nse_rate||DEF_NSE);
@@ -586,10 +512,7 @@ function App(){
     else{
       setTsmMsg("✓ Saved!");
       await loadTraders();
-      // Update selTrader if it's the same one
-      if(selTrader?.id===traderSetModal.id){
-        setST(prev=>({...prev,nse_rate:tsmNse,mcx_scripts:tsmMcx}));
-      }
+      if(selTrader?.id===traderSetModal.id){setST(prev=>({...prev,nse_rate:tsmNse,mcx_scripts:tsmMcx}));}
       setTimeout(()=>{setTSM(null);setTsmMsg("");},1200);
     }
     setTsmSaving(false);
@@ -598,7 +521,6 @@ function App(){
   const updTsmMcx=(i,f,v)=>setTsmMcx(p=>p.map((s,idx)=>idx===i?{...s,[f]:v}:s));
   const delTsmMcx=(i)=>setTsmMcx(p=>p.filter((_,idx)=>idx!==i));
 
-  // ── Weeks ──
   const createWeek=async()=>{
     if(!newWeek.label.trim()){setWE("Label required");return;}
     const{data,error}=await sb.from("weeks").insert({label:newWeek.label.trim(),start_date:newWeek.start_date||null,end_date:newWeek.end_date||null,created_by:currentUser.username,status:"open"}).select().single();
@@ -607,7 +529,6 @@ function App(){
     await loadWeeks();if(data)setSW(data);
   };
 
-  // ── Trades ──
   const updTrade=(id,f,v)=>{
     setTrades(prev=>prev.map(r=>{
       if(r.id!==id)return r;
@@ -626,7 +547,6 @@ function App(){
   const markNorm=()=>{setTrades(p=>p.map(t=>selRows.has(t.id)?{...t,type:"NORMAL"}:t));setSelRows(new Set());};
   const togRow=(id)=>{setSelRows(p=>{const n=new Set(p);n.has(id)?n.delete(id):n.add(id);return n;});};
 
-  // ── Excel ──
   const handleXL=(e)=>{
     const file=e.target.files[0];if(!file)return;
     const reader=new FileReader();
@@ -648,18 +568,18 @@ function App(){
     reader.readAsBinaryString(file);e.target.value="";
   };
 
+  // ✅ FIX 2: confirmImport — saveTimer.current restored
   const confirmImport=async(andSave=false)=>{
     const base=tradesRef.current.filter(t=>t.script||t.trade_date);
     const maxO=Math.min(base.reduce((m,t)=>Math.max(m,t.sort_order||0),0),1900000);
     const merged=[...base,...xlPrev.map((t,i)=>({...t,sort_order:Math.min(maxO+i+10,1999990)}))];
     setTrades(merged);setShXP(false);setXP(null);
     if(andSave&&selTraderRef.current&&selWeekRef.current){
-      if(.current)clearTimeout(.current);
+      if(saveTimer.current)clearTimeout(saveTimer.current);
       await doSaveRef.current(selTraderRef.current.id,selWeekRef.current.id,merged,true);
     }
   };
 
-  // ── Settlement ──
   const runSettlement=async()=>{
     if(!settlWeek){setSettlMsg("Select a week");return;}
     const missing=settlRates.find(r=>!r.rate||isNaN(parseFloat(r.rate)));
@@ -668,32 +588,20 @@ function App(){
     setSettlLoad(true);setSettlMsg("⏳ Processing...");
     const slog=[];
     try{
-      // Step 1: Save rates
       for(const r of settlRates){
         await sb.from("settlement_rates").upsert(
           {week_id:settlWeek.id,script:r.script.toUpperCase().trim(),rate:parseFloat(r.rate),exchange:r.exchange||"NSE"},
           {onConflict:"week_id,script"}
         );
       }
-      // Step 2: Build rate map
       const sMap={};
       settlRates.forEach(r=>{sMap[r.script.toUpperCase().trim()]={rate:parseFloat(r.rate),exchange:r.exchange||"NSE"};});
-      slog.push("Scripts: "+Object.keys(sMap).join(","));
-
-      // Step 3: Load all traders
       const{data:allT}=await sb.from("traders").select("*").eq("active",true);
-      slog.push("Traders: "+(allT||[]).length);
       let settledCount=0,totalTrades=0;
-
       for(const trader of (allT||[])){
-        // Step 4: Load all trades for this trader+week
-        const{data:allTr}=await sb.from("trades").select("*")
-          .eq("trader_id",trader.id).eq("week_id",settlWeek.id);
+        const{data:allTr}=await sb.from("trades").select("*").eq("trader_id",trader.id).eq("week_id",settlWeek.id);
         const tt=(allTr||[]).filter(t=>(t.type||"").toUpperCase()==="NORMAL");
-        slog.push(trader.name+":"+tt.length+"normal");
         if(!tt.length)continue;
-
-        // Step 5: Calc positions
         const pos={};
         for(const t of tt){
           const s=(t.script||"").toUpperCase().trim();
@@ -704,66 +612,34 @@ function App(){
           else pos[s].s+=q;
         }
         if(!Object.keys(pos).length)continue;
-
-        // Step 6: Delete old settlement trades
-        await sb.from("trades").delete()
-          .eq("trader_id",trader.id).eq("week_id",settlWeek.id).eq("is_settlement",true);
-
-        // Step 7: Insert new settlement trades one by one
+        await sb.from("trades").delete().eq("trader_id",trader.id).eq("week_id",settlWeek.id).eq("is_settlement",true);
         let ins=0;
         for(const[script,p]of Object.entries(pos)){
           const price=parseFloat(sMap[script].rate);
           const exch=p.exch||"NSE";
           if(p.b>0.001){
-            const{error:e1}=await sb.from("trades").insert({
-              id:uid(),trader_id:trader.id,week_id:settlWeek.id,
-              trade_date:"Settlement",action:"SELL",qty:p.b,price,
-              vol:Math.round(p.b*price*100)/100,script,
-              type:"FORWARD",exchange:exch,is_settlement:true,sort_order:999998
-            });
-            if(e1)slog.push("ERR:"+trader.name+script+"BUY:"+e1.message);
-            else ins++;
+            const{error:e1}=await sb.from("trades").insert({id:uid(),trader_id:trader.id,week_id:settlWeek.id,trade_date:"Settlement",action:"SELL",qty:p.b,price,vol:Math.round(p.b*price*100)/100,script,type:"FORWARD",exchange:exch,is_settlement:true,sort_order:999998});
+            if(!e1)ins++;
           }
           if(p.s>0.001){
-            const{error:e2}=await sb.from("trades").insert({
-              id:uid(),trader_id:trader.id,week_id:settlWeek.id,
-              trade_date:"Settlement",action:"BUY",qty:p.s,price,
-              vol:Math.round(p.s*price*100)/100,script,
-              type:"FORWARD",exchange:exch,is_settlement:true,sort_order:999999
-            });
-            if(e2)slog.push("ERR:"+trader.name+script+"SELL:"+e2.message);
-            else ins++;
+            const{error:e2}=await sb.from("trades").insert({id:uid(),trader_id:trader.id,week_id:settlWeek.id,trade_date:"Settlement",action:"BUY",qty:p.s,price,vol:Math.round(p.s*price*100)/100,script,type:"FORWARD",exchange:exch,is_settlement:true,sort_order:999999});
+            if(!e2)ins++;
           }
         }
         if(ins>0){settledCount++;totalTrades+=ins;}
-        slog.push(trader.name+":inserted "+ins);
       }
-
-      // Step 8: Mark week settled
       await sb.from("weeks").update({status:"settled"}).eq("id",settlWeek.id);
       await loadWeeks();
-
-      const resultMsg=settledCount>0
-        ? `✅ Done! ${settledCount} traders · ${totalTrades} settlement trades created`
-        : "⚠️ 0 traders settled — make sure traders have NORMAL trades saved for this week first";
+      const resultMsg=settledCount>0?`✅ Done! ${settledCount} traders · ${totalTrades} settlement trades created`:"⚠️ 0 traders settled — make sure traders have NORMAL trades saved for this week first";
       setSettlMsg(resultMsg);
-      console.log("Settlement log:", slog);
-
-      // Step 9: Load bills
       const fw={...settlWeek,status:"settled"};
       setBW(fw);
       setTimeout(()=>loadBillsRef.current(fw),500);
-      if(selWeekRef.current?.id===settlWeek.id&&selTraderRef.current){
-        loadTrades(selTraderRef.current.id,settlWeek.id);
-      }
-    }catch(e){
-      setSettlMsg("❌ Error: "+e.message);
-      console.error("Settlement crashed:",e);
-    }
+      if(selWeekRef.current?.id===settlWeek.id&&selTraderRef.current){loadTrades(selTraderRef.current.id,settlWeek.id);}
+    }catch(e){setSettlMsg("❌ Error: "+e.message);console.error("Settlement crashed:",e);}
     setSettlLoad(false);
   };
 
-  // ── Users ──
   const createUser=async()=>{
     if(!newUser.username||!newUser.password){setUE("Required");return;}
     setUL(true);
@@ -778,13 +654,11 @@ function App(){
   const subCP=async()=>{if(!newPwd){setPE("Enter password");return;}if(newPwd!==confirmPwd){setPE("Don't match");return;}const{error}=await sb.from("users").update({password:newPwd}).eq("id",cpTarget.id);if(error){setPE(error.message);return;}setPO("Updated ✓");setTimeout(()=>{setSCP(false);setPO("");},1400);await loadUsers();};
   const subSP=async()=>{if(!spOld||!spNew||!spCnf){setSPE("All required");return;}if(currentUser.password!==spOld){setSPE("Wrong current password");return;}if(spNew!==spCnf){setSPE("Don't match");return;}const{error}=await sb.from("users").update({password:spNew}).eq("id",currentUser.id);if(error){setSPE(error.message);return;}setCU({...currentUser,password:spNew});setSPOK("Changed ✓");setTimeout(()=>{setShSP(false);setSPOK("");setSPO("");setSPN("");setSPC("");},1400);};
 
-  // ── Styles ──
   const inp={background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:5,color:"white",padding:"6px 8px",fontSize:12,width:"100%",fontFamily:"inherit",transition:"border-color 0.2s"};
   const inpLg={...inp,fontSize:13,padding:"10px 12px",borderRadius:7};
   const sl=(bg)=>({...inp,background:bg,cursor:"pointer",fontWeight:700,textAlign:"center",padding:"5px 4px"});
   const btn=(bg,c="white")=>({background:bg,border:"none",borderRadius:8,color:c,padding:"9px 16px",fontSize:13,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"});
 
-  // ── LOGIN ──
   if(!currentUser) return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#070d1a,#0f1f3d,#070d1a)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:20,padding:"48px 36px",width:"100%",maxWidth:420,textAlign:"center"}}>
@@ -813,8 +687,6 @@ function App(){
 
   return (
     <div style={{minHeight:"100vh",background:"#070d1a"}}>
-
-      {/* HEADER */}
       <div style={{background:"linear-gradient(135deg,#0f172a,#1e1b4b)",borderBottom:"1px solid rgba(99,102,241,0.2)",padding:"12px 16px"}}>
         <div style={{maxWidth:1400,margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -835,9 +707,7 @@ function App(){
               </div>
             ))}
             <div style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,padding:"6px 10px",display:"flex",alignItems:"center",gap:8}}>
-              <div style={{width:30,height:30,background:`linear-gradient(135deg,${isAdmin?"#7c3aed,#4f46e5":"#0369a1,#0284c7"})`,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>
-                {isAdmin?"👑":"👤"}
-              </div>
+              <div style={{width:30,height:30,background:`linear-gradient(135deg,${isAdmin?"#7c3aed,#4f46e5":"#0369a1,#0284c7"})`,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{isAdmin?"👑":"👤"}</div>
               <div>
                 <div style={{fontSize:12,fontWeight:700}}>{currentUser.name||currentUser.username}</div>
                 <div style={{fontSize:9,color:isAdmin?"#a78bfa":"#60a5fa",textTransform:"uppercase",letterSpacing:1}}>{currentUser.role}</div>
@@ -849,7 +719,6 @@ function App(){
         </div>
       </div>
 
-      {/* TABS */}
       <div className="tbar" style={{background:"#0c1528",borderBottom:"1px solid rgba(255,255,255,0.05)",display:"flex",padding:"0 16px",overflowX:"auto"}}>
         {TABS.map(t=>(
           <button key={t} className={`tb ${tab===t?"ta":""}`} onClick={()=>setTab(t)}
@@ -861,10 +730,8 @@ function App(){
 
       <div className="mp" style={{maxWidth:1400,margin:"0 auto",padding:"20px 14px"}}>
 
-        {/* ════════ TRADERS TAB ════════ */}
         {tab==="Traders"&&(
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:20}}>
-            {/* Create Trader */}
             <div style={{background:"rgba(99,102,241,0.05)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:14,padding:24}}>
               <div style={{fontSize:11,color:"#a5b4fc",fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:20}}>➕ Add New Trader</div>
               {[{l:"Full Name *",f:"name",ph:"e.g. Rahul Sharma"},{l:"Phone",f:"phone",ph:"Optional"},{l:"Note",f:"note",ph:"Optional"}].map(({l,f,ph})=>(
@@ -875,29 +742,18 @@ function App(){
               ))}
               {traderErr&&<div style={{color:"#f87171",fontSize:12,marginBottom:12,padding:"8px 12px",background:"rgba(220,38,38,0.08)",borderRadius:6,border:"1px solid rgba(220,38,38,0.2)"}}>⚠ {traderErr}</div>}
               <button onClick={createTrader} style={{...btn("linear-gradient(135deg,#4f46e5,#7c3aed)"),width:"100%",padding:"12px",fontSize:14}}>+ Add Trader</button>
-              <div style={{marginTop:12,fontSize:11,color:"#475569",textAlign:"center"}}>Duplicate names (any case) are not allowed</div>
             </div>
-
-            {/* Traders List */}
             <div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:14,padding:24}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
                 <span style={{fontSize:11,color:"#a5b4fc",fontWeight:700,letterSpacing:2,textTransform:"uppercase"}}>🧑‍💼 Traders ({traders.length})</span>
                 {tradersLoad&&<Spin s={14}/>}
               </div>
-              {/* Search Box */}
               <div style={{position:"relative",marginBottom:14}}>
                 <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#475569"}}>🔍</span>
-                <input type="text" placeholder="Search trader by name..." value={traderSearch}
-                  onChange={e=>setTS(e.target.value)}
-                  style={{...inpLg,paddingLeft:32,fontSize:12}}/>
+                <input type="text" placeholder="Search trader by name..." value={traderSearch} onChange={e=>setTS(e.target.value)} style={{...inpLg,paddingLeft:32,fontSize:12}}/>
                 {traderSearch&&<button onClick={()=>setTS("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:14}}>✕</button>}
               </div>
-
-              {filteredTraders.length===0&&!tradersLoad&&(
-                <div style={{color:"#334155",textAlign:"center",padding:"20px 0",fontSize:13}}>
-                  {traderSearch?"No traders matching search":"No traders yet."}
-                </div>
-              )}
+              {filteredTraders.length===0&&!tradersLoad&&<div style={{color:"#334155",textAlign:"center",padding:"20px 0",fontSize:13}}>{traderSearch?"No traders matching search":"No traders yet."}</div>}
               {filteredTraders.map(t=>(
                 <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:10,marginBottom:8,flexWrap:"wrap"}}>
                   <div style={{width:36,height:36,background:"linear-gradient(135deg,#0369a1,#0284c7)",borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0}}>🧑‍💼</div>
@@ -915,10 +771,8 @@ function App(){
           </div>
         )}
 
-        {/* ════════ ENTRY TAB ════════ */}
         {tab==="Entry"&&(
           <div>
-            {/* Toolbar */}
             <div style={{display:"flex",gap:10,marginBottom:14,alignItems:"center",flexWrap:"wrap",background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 14px"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:200}}>
                 <span style={{fontSize:13,color:"#94a3b8",fontWeight:700,whiteSpace:"nowrap"}}>🧑‍💼</span>
@@ -938,27 +792,21 @@ function App(){
               <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
                 <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleXL} style={{display:"none"}}/>
                 <button onClick={()=>fileRef.current.click()} disabled={!selTrader||!selWeek} style={{...btn("rgba(22,163,74,0.12)","#4ade80"),border:"1px solid rgba(22,163,74,0.28)",opacity:(!selTrader||!selWeek)?0.4:1,fontSize:12,padding:"8px 12px"}}>📤 Excel</button>
-                {/* MANUAL SAVE BUTTON */}
-                <button onClick={manualSave} disabled={!selTrader||!selWeek||manualSaving}
-                  style={{...btn("rgba(99,102,241,0.2)","#a5b4fc"),border:"1px solid rgba(99,102,241,0.4)",opacity:(!selTrader||!selWeek)?0.4:1,fontSize:12,padding:"8px 14px",display:"flex",alignItems:"center",gap:6}}>
+                <button onClick={manualSave} disabled={!selTrader||!selWeek||manualSaving} style={{...btn("rgba(99,102,241,0.2)","#a5b4fc"),border:"1px solid rgba(99,102,241,0.4)",opacity:(!selTrader||!selWeek)?0.4:1,fontSize:12,padding:"8px 14px",display:"flex",alignItems:"center",gap:6}}>
                   {manualSaving?<><Spin s={12} c="#a5b4fc"/><span>Saving...</span></>:"💾 Save"}
                 </button>
                 <button onClick={()=>setPT(p=>p==="dark"?"light":"dark")} style={{background:pdfTheme==="dark"?"#0f172a":"#f0f4f8",border:`2px solid ${pdfTheme==="dark"?"#6366f1":"#2563eb"}`,borderRadius:20,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer",color:pdfTheme==="dark"?"white":"#1e293b"}}>{pdfTheme==="dark"?"🌑":"☀️"}</button>
                 <button onClick={()=>selTrader&&selWeek&&generateBillPDF(selTrader.name,selWeek.label,trades,selTrader,pdfTheme)} disabled={!selTrader||!selWeek} style={{...btn("#0369a1"),opacity:(!selTrader||!selWeek)?0.4:1,fontSize:12,padding:"8px 12px"}}>⬇ PDF</button>
               </div>
             </div>
-
             {!selTrader||!selWeek?(
               <div style={{textAlign:"center",padding:"60px 20px",background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14}}>
                 <div style={{fontSize:36,marginBottom:12}}>🧑‍💼</div>
                 <div style={{color:"#475569",fontSize:15,marginBottom:8}}>Select a Trader and Week above</div>
-                <div style={{color:"#334155",fontSize:12}}>
-                  <span style={{color:"#6366f1",cursor:"pointer",textDecoration:"underline"}} onClick={()=>setTab("Traders")}>Traders tab</span> → create traders · then click <strong style={{color:"#4ade80"}}>+ Week</strong>
-                </div>
+                <div style={{color:"#334155",fontSize:12}}><span style={{color:"#6366f1",cursor:"pointer",textDecoration:"underline"}} onClick={()=>setTab("Traders")}>Traders tab</span> → create traders · then click <strong style={{color:"#4ade80"}}>+ Week</strong></div>
               </div>
             ):(
               <>
-                {/* Selected rows toolbar */}
                 {selRows.size>0&&(
                   <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:10,padding:"10px 14px",background:"rgba(99,102,241,0.08)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:10,flexWrap:"wrap"}}>
                     <span style={{fontSize:12,color:"#a5b4fc",fontWeight:700}}>{selRows.size} row{selRows.size>1?"s":""} selected</span>
@@ -967,8 +815,6 @@ function App(){
                     <button onClick={()=>setSelRows(new Set())} style={{...btn("rgba(255,255,255,0.07)","#64748b"),fontSize:12,padding:"6px 10px"}}>✕ Clear</button>
                   </div>
                 )}
-
-                {/* Trade Table */}
                 <div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:14,overflow:"hidden"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 14px",background:"rgba(30,58,138,0.3)",borderBottom:"1px solid rgba(255,255,255,0.06)",flexWrap:"wrap",gap:6}}>
                     <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -980,7 +826,6 @@ function App(){
                     </div>
                     <div style={{fontSize:12,color:"#64748b"}}>{trades.length} trades · Normal:{trades.filter(t=>t.type==="NORMAL").length} · Fwd:{trades.filter(t=>t.type==="FORWARD").length}</div>
                   </div>
-
                   <div className="ew">
                     <div className="eh" style={{background:"rgba(99,102,241,0.15)",borderBottom:"1px solid rgba(99,102,241,0.2)"}}>
                       <div style={{color:"#a5b4fc",fontSize:10,fontWeight:700}}>✓</div>
@@ -995,28 +840,21 @@ function App(){
                           <input type="checkbox" checked={selRows.has(row.id)} onChange={()=>togRow(row.id)} style={{width:14,height:14,cursor:"pointer",accentColor:"#6366f1"}}/>
                         </div>
                         <input type="text" placeholder="DD/MM/YYYY" value={row.trade_date} onChange={e=>updTrade(row.id,"trade_date",e.target.value)} style={inp}/>
-                        <select value={row.action} onChange={e=>updTrade(row.id,"action",e.target.value)} style={sl(row.action==="BUY"?"rgba(22,163,74,0.3)":"rgba(220,38,38,0.3)")}>
-                          <option>BUY</option><option>SELL</option>
-                        </select>
+                        <select value={row.action} onChange={e=>updTrade(row.id,"action",e.target.value)} style={sl(row.action==="BUY"?"rgba(22,163,74,0.3)":"rgba(220,38,38,0.3)")}><option>BUY</option><option>SELL</option></select>
                         <input type="number" placeholder="0" value={row.qty} onChange={e=>updTrade(row.id,"qty",e.target.value)} style={{...inp,color:"#fde68a"}}/>
                         <input type="number" placeholder="0.00" step="0.01" value={row.price} onChange={e=>updTrade(row.id,"price",e.target.value)} style={{...inp,color:"#fde68a"}}/>
                         <div style={{background:"rgba(99,102,241,0.1)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:5,padding:"5px 7px",fontSize:11,color:"#a5b4fc",fontWeight:700,minHeight:30,display:"flex",alignItems:"center",overflow:"hidden"}}>
                           {row.vol?`₹ ${Number(row.vol).toLocaleString("en-IN")}`:<span style={{color:"rgba(148,163,184,0.3)",fontWeight:400,fontSize:10}}>Auto</span>}
                         </div>
                         <input type="text" placeholder="GOLD" value={row.script} onChange={e=>updTrade(row.id,"script",e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""))} style={{...inp,color:"#fbbf24",fontWeight:700}}/>
-                        <select value={row.type} onChange={e=>updTrade(row.id,"type",e.target.value)} style={sl(row.type==="FORWARD"?"rgba(168,85,247,0.25)":"rgba(255,255,255,0.06)")}>
-                          <option>NORMAL</option><option>FORWARD</option>
-                        </select>
-                        <select value={row.exchange} onChange={e=>updTrade(row.id,"exchange",e.target.value)} style={sl(row.exchange==="MCX"?"rgba(234,179,8,0.25)":"rgba(59,130,246,0.25)")}>
-                          <option>NSE</option><option>MCX</option>
-                        </select>
+                        <select value={row.type} onChange={e=>updTrade(row.id,"type",e.target.value)} style={sl(row.type==="FORWARD"?"rgba(168,85,247,0.25)":"rgba(255,255,255,0.06)")}><option>NORMAL</option><option>FORWARD</option></select>
+                        <select value={row.exchange} onChange={e=>updTrade(row.id,"exchange",e.target.value)} style={sl(row.exchange==="MCX"?"rgba(234,179,8,0.25)":"rgba(59,130,246,0.25)")}><option>NSE</option><option>MCX</option></select>
                         <div style={{display:"flex",alignItems:"center",justifyContent:"center"}}>
                           <button className="dl" onClick={()=>remTrade(row.id)} disabled={trades.length===1} style={{...btn("rgba(220,38,38,0.08)","#f87171"),border:"1px solid rgba(220,38,38,0.2)",width:26,height:26,padding:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,opacity:trades.length===1?0.3:1}}>✕</button>
                         </div>
                       </div>
                     ))}
                   </div>
-
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"rgba(0,0,0,0.25)",borderTop:"1px solid rgba(255,255,255,0.04)",flexWrap:"wrap",gap:8}}>
                     <div style={{display:"flex",gap:8,alignItems:"center"}}>
                       <button onClick={addTrade} style={{...btn("#4f46e5"),fontSize:12,padding:"8px 14px"}}>+ Add Row</button>
@@ -1032,17 +870,15 @@ function App(){
                 </div>
                 <div style={{marginTop:8,background:"rgba(168,85,247,0.04)",border:"1px solid rgba(168,85,247,0.12)",borderRadius:8,padding:"8px 14px",fontSize:12,color:"#64748b"}}>
                   <span style={{color:"#c084fc",fontWeight:700}}>💡 </span>
-                  Check rows → <strong style={{color:"#c084fc"}}>Mark FORWARD</strong> · Auto-saved to cloud every 1.5s · Use <strong style={{color:"#4ade80"}}>💾 Save Now</strong> for instant save · Excel: <code style={{color:"#fde68a",background:"rgba(255,255,255,0.05)",padding:"0 5px",borderRadius:3}}>Date|Action|Qty|Price|Script|Type|Exchange</code>
+                  Check rows → <strong style={{color:"#c084fc"}}>Mark FORWARD</strong> · Auto-saved to cloud every 1.5s · Use <strong style={{color:"#4ade80"}}>💾 Save Now</strong> for instant save
                 </div>
               </>
             )}
           </div>
         )}
 
-        {/* ════════ TRADE LIST TAB ════════ */}
         {tab==="TradeList"&&(
           <div>
-            {/* Header controls */}
             <div style={{display:"flex",gap:10,marginBottom:16,alignItems:"center",flexWrap:"wrap",background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 14px"}}>
               <span style={{fontSize:12,color:"#94a3b8",fontWeight:700,whiteSpace:"nowrap"}}>📅 Select Week:</span>
               <select value={tlWeek?.id||""} onChange={e=>{const w=weeks.find(x=>x.id===e.target.value);setTlWeek(w||null);setTlData([]);}} style={{...inpLg,color:"#a5b4fc",fontWeight:700,flex:1,minWidth:200}}>
@@ -1055,18 +891,10 @@ function App(){
                 <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
                   <button onClick={()=>setTlExpanded(()=>{const e={};tlData.forEach(r=>{e[r.trader.id]=true;});return e;})} style={{...btn("rgba(255,255,255,0.07)","#94a3b8"),border:"1px solid rgba(255,255,255,0.1)",fontSize:11,padding:"6px 12px"}}>Expand All</button>
                   <button onClick={()=>setTlExpanded({})} style={{...btn("rgba(255,255,255,0.07)","#94a3b8"),border:"1px solid rgba(255,255,255,0.1)",fontSize:11,padding:"6px 12px"}}>Collapse All</button>
-                  <button onClick={async()=>{
-                    // Save ALL traders at once
-                    for(const row of tlData){
-                      await tlSaveTrader(row.trader.id,tlWeek.id,row.trades);
-                    }
-                  }} style={{...btn("linear-gradient(135deg,#059669,#047857)"),fontSize:12,padding:"8px 18px",display:"flex",alignItems:"center",gap:6}}>
-                    💾 Save All Traders
-                  </button>
+                  <button onClick={async()=>{for(const row of tlData){await tlSaveTrader(row.trader.id,tlWeek.id,row.trades);}}} style={{...btn("linear-gradient(135deg,#059669,#047857)"),fontSize:12,padding:"8px 18px",display:"flex",alignItems:"center",gap:6}}>💾 Save All Traders</button>
                 </div>
               )}
             </div>
-
             {!tlWeek?(
               <div style={{textAlign:"center",padding:"60px 20px",background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14}}>
                 <div style={{fontSize:36,marginBottom:12}}>📃</div>
@@ -1076,20 +904,13 @@ function App(){
               <div style={{textAlign:"center",padding:"40px 20px",background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,color:"#475569"}}>No traders found</div>
             ):(
               <div>
-                {/* Summary row */}
                 {(()=>{
                   const allTr=tlData.flatMap(r=>r.trades);
                   const norm=allTr.filter(t=>(t.type||"").toUpperCase()==="NORMAL");
                   const fwd=allTr.filter(t=>(t.type||"").toUpperCase()==="FORWARD");
                   return(
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:16}}>
-                      {[
-                        {l:"Traders",v:tlData.length,fc:"#a5b4fc",cnt:true},
-                        {l:"Total Trades",v:allTr.length,fc:"#e2e8f0",cnt:true},
-                        {l:"Normal",v:norm.length,fc:"#60a5fa",cnt:true},
-                        {l:"Forward",v:fwd.length,fc:"#c084fc",cnt:true},
-                        {l:"Scripts",v:[...new Set(allTr.map(t=>t.script).filter(Boolean))].length,fc:"#fbbf24",cnt:true},
-                      ].map(c=>(
+                      {[{l:"Traders",v:tlData.length,fc:"#a5b4fc"},{l:"Total Trades",v:allTr.length,fc:"#e2e8f0"},{l:"Normal",v:norm.length,fc:"#60a5fa"},{l:"Forward",v:fwd.length,fc:"#c084fc"},{l:"Scripts",v:[...new Set(allTr.map(t=>t.script).filter(Boolean))].length,fc:"#fbbf24"}].map(c=>(
                         <div key={c.l} style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"10px 14px",textAlign:"center"}}>
                           <div style={{fontSize:9,color:"#64748b",textTransform:"uppercase",letterSpacing:1,marginBottom:3}}>{c.l}</div>
                           <div style={{fontSize:18,fontWeight:800,color:c.fc}}>{c.v}</div>
@@ -1098,8 +919,6 @@ function App(){
                     </div>
                   );
                 })()}
-
-                {/* Per-trader expandable rows */}
                 {tlData.map(row=>{
                   const isExp=tlExpanded[row.trader.id]||false;
                   const normalCount=row.trades.filter(t=>(t.type||"").toUpperCase()==="NORMAL").length;
@@ -1112,41 +931,29 @@ function App(){
                   const msg=tlMsg[row.trader.id]||"";
                   return(
                     <div key={row.trader.id} style={{marginBottom:12,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:14,overflow:"hidden"}}>
-                      {/* Trader header row — click to expand */}
                       <div onClick={()=>setTlExpanded(p=>({...p,[row.trader.id]:!p[row.trader.id]}))}
                         style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",background:"linear-gradient(90deg,rgba(30,58,138,0.6),rgba(37,99,235,0.2))",cursor:"pointer",flexWrap:"wrap",userSelect:"none"}}>
                         <span style={{fontSize:16,transition:"transform 0.2s",display:"inline-block",transform:isExp?"rotate(90deg)":"rotate(0deg)"}}>▶</span>
                         <div style={{width:36,height:36,background:"linear-gradient(135deg,#0369a1,#0284c7)",borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>🧑‍💼</div>
                         <div style={{flex:1,minWidth:120}}>
                           <div style={{fontWeight:800,color:"white",fontSize:15}}>{row.trader.name}</div>
-                          <div style={{fontSize:11,color:"#64748b"}}>
-                            {row.trades.length} trades · Normal:{normalCount} · Fwd:{fwdCount}
-                            {row.trader.phone&&<span> · 📞{row.trader.phone}</span>}
-                          </div>
+                          <div style={{fontSize:11,color:"#64748b"}}>{row.trades.length} trades · Normal:{normalCount} · Fwd:{fwdCount}{row.trader.phone&&<span> · 📞{row.trader.phone}</span>}</div>
                         </div>
-                        {/* Script badges */}
                         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                           {[...new Set(row.trades.map(t=>t.script).filter(Boolean))].slice(0,5).map(s=>(
                             <span key={s} style={{background:"rgba(251,191,36,0.15)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:5,padding:"2px 8px",fontSize:11,color:"#fbbf24",fontWeight:700}}>{s}</span>
                           ))}
-                          {[...new Set(row.trades.map(t=>t.script).filter(Boolean))].length>5&&
-                            <span style={{color:"#475569",fontSize:11}}>+{[...new Set(row.trades.map(t=>t.script).filter(Boolean))].length-5} more</span>}
                         </div>
                         <div style={{textAlign:"right",marginLeft:"auto"}}>
                           <div style={{fontSize:10,color:"#64748b"}}>Net P&L</div>
                           <div style={{fontSize:16,fontWeight:800,color:net>=0?"#4ade80":"#f87171"}}>₹{fmt(net)}</div>
                         </div>
-                        {/* Save button visible on hover */}
-                        <button onClick={e=>{e.stopPropagation();tlSaveTrader(row.trader.id,tlWeek.id,row.trades);}}
-                          disabled={saving}
-                          style={{...btn("rgba(22,163,74,0.15)","#4ade80"),border:"1px solid rgba(22,163,74,0.3)",fontSize:11,padding:"5px 12px",display:"flex",alignItems:"center",gap:5,opacity:saving?0.6:1}}
-                          onClick={e=>{e.stopPropagation();tlSaveTrader(row.trader.id,tlWeek.id,row.trades);}}>
+                        <button onClick={e=>{e.stopPropagation();tlSaveTrader(row.trader.id,tlWeek.id,row.trades);}} disabled={saving}
+                          style={{...btn("rgba(22,163,74,0.15)","#4ade80"),border:"1px solid rgba(22,163,74,0.3)",fontSize:11,padding:"5px 12px",display:"flex",alignItems:"center",gap:5,opacity:saving?0.6:1}}>
                           {saving?<><Spin s={11} c="#4ade80"/><span>Saving...</span></>:"💾 Save"}
                         </button>
                         {msg&&<span style={{fontSize:11,color:msg.startsWith("✓")?"#4ade80":"#f87171",fontWeight:700}}>{msg}</span>}
                       </div>
-
-                      {/* Expandable trade table */}
                       {isExp&&(
                         <div>
                           <div className="ew">
@@ -1159,52 +966,32 @@ function App(){
                             {row.trades.map((t,idx)=>(
                               <div key={t.id} className="eg" style={{borderBottom:"1px solid rgba(255,255,255,0.03)",background:t.type==="FORWARD"?"rgba(168,85,247,0.04)":idx%2===0?"transparent":"rgba(255,255,255,0.01)"}}>
                                 <div style={{fontSize:10,color:"#334155",textAlign:"center"}}>{idx+1}</div>
-                                <input type="text" placeholder="DD/MM/YYYY" value={t.trade_date}
-                                  onChange={e=>tlUpdateTrade(row.trader.id,t.id,"trade_date",e.target.value)} style={inp}/>
-                                <select value={t.action||"BUY"} onChange={e=>tlUpdateTrade(row.trader.id,t.id,"action",e.target.value)}
-                                  style={sl((t.action||"BUY")==="BUY"?"rgba(22,163,74,0.3)":"rgba(220,38,38,0.3)")}>
-                                  <option>BUY</option><option>SELL</option>
-                                </select>
-                                <input type="number" placeholder="0" value={t.qty}
-                                  onChange={e=>tlUpdateTrade(row.trader.id,t.id,"qty",e.target.value)} style={{...inp,color:"#fde68a"}}/>
-                                <input type="number" placeholder="0.00" step="0.01" value={t.price}
-                                  onChange={e=>tlUpdateTrade(row.trader.id,t.id,"price",e.target.value)} style={{...inp,color:"#fde68a"}}/>
+                                <input type="text" placeholder="DD/MM/YYYY" value={t.trade_date} onChange={e=>tlUpdateTrade(row.trader.id,t.id,"trade_date",e.target.value)} style={inp}/>
+                                <select value={t.action||"BUY"} onChange={e=>tlUpdateTrade(row.trader.id,t.id,"action",e.target.value)} style={sl((t.action||"BUY")==="BUY"?"rgba(22,163,74,0.3)":"rgba(220,38,38,0.3)")}><option>BUY</option><option>SELL</option></select>
+                                <input type="number" placeholder="0" value={t.qty} onChange={e=>tlUpdateTrade(row.trader.id,t.id,"qty",e.target.value)} style={{...inp,color:"#fde68a"}}/>
+                                <input type="number" placeholder="0.00" step="0.01" value={t.price} onChange={e=>tlUpdateTrade(row.trader.id,t.id,"price",e.target.value)} style={{...inp,color:"#fde68a"}}/>
                                 <div style={{background:"rgba(99,102,241,0.1)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:5,padding:"5px 7px",fontSize:11,color:"#a5b4fc",fontWeight:700,minHeight:30,display:"flex",alignItems:"center",overflow:"hidden"}}>
                                   {t.vol?`₹ ${Number(t.vol).toLocaleString("en-IN")}`:<span style={{color:"rgba(148,163,184,0.25)",fontSize:10}}>Auto</span>}
                                 </div>
-                                <input type="text" placeholder="SCRIPT" value={t.script||""}
-                                  onChange={e=>tlUpdateTrade(row.trader.id,t.id,"script",e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""))}
-                                  style={{...inp,color:"#fbbf24",fontWeight:700}}/>
-                                <select value={t.type||"NORMAL"} onChange={e=>tlUpdateTrade(row.trader.id,t.id,"type",e.target.value)}
-                                  style={sl((t.type||"NORMAL")==="FORWARD"?"rgba(168,85,247,0.25)":"rgba(255,255,255,0.06)")}>
-                                  <option>NORMAL</option><option>FORWARD</option>
-                                </select>
-                                <select value={t.exchange||"NSE"} onChange={e=>tlUpdateTrade(row.trader.id,t.id,"exchange",e.target.value)}
-                                  style={sl((t.exchange||"NSE")==="MCX"?"rgba(234,179,8,0.25)":"rgba(59,130,246,0.25)")}>
-                                  <option>NSE</option><option>MCX</option>
-                                </select>
+                                <input type="text" placeholder="SCRIPT" value={t.script||""} onChange={e=>tlUpdateTrade(row.trader.id,t.id,"script",e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""))} style={{...inp,color:"#fbbf24",fontWeight:700}}/>
+                                <select value={t.type||"NORMAL"} onChange={e=>tlUpdateTrade(row.trader.id,t.id,"type",e.target.value)} style={sl((t.type||"NORMAL")==="FORWARD"?"rgba(168,85,247,0.25)":"rgba(255,255,255,0.06)")}><option>NORMAL</option><option>FORWARD</option></select>
+                                <select value={t.exchange||"NSE"} onChange={e=>tlUpdateTrade(row.trader.id,t.id,"exchange",e.target.value)} style={sl((t.exchange||"NSE")==="MCX"?"rgba(234,179,8,0.25)":"rgba(59,130,246,0.25)")}><option>NSE</option><option>MCX</option></select>
                                 <div style={{display:"flex",alignItems:"center",justifyContent:"center"}}>
-                                  <button className="dl" onClick={()=>tlRemoveRow(row.trader.id,t.id)}
-                                    disabled={row.trades.length===1&&!t.script&&!t.trade_date}
-                                    style={{...btn("rgba(220,38,38,0.08)","#f87171"),border:"1px solid rgba(220,38,38,0.2)",width:26,height:26,padding:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,opacity:(row.trades.length===1&&!t.script)?0.3:1}}>✕</button>
+                                  <button className="dl" onClick={()=>tlRemoveRow(row.trader.id,t.id)} style={{...btn("rgba(220,38,38,0.08)","#f87171"),border:"1px solid rgba(220,38,38,0.2)",width:26,height:26,padding:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12}}>✕</button>
                                 </div>
                               </div>
                             ))}
                           </div>
-                          {/* Footer: add row + save + p&l */}
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",background:"rgba(0,0,0,0.2)",borderTop:"1px solid rgba(255,255,255,0.04)",flexWrap:"wrap",gap:8}}>
                             <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                              <button onClick={()=>tlAddNewRow(row.trader.id)}
-                                style={{...btn("#4f46e5"),fontSize:12,padding:"7px 14px"}}>+ Add Row</button>
+                              <button onClick={()=>tlAddNewRow(row.trader.id)} style={{...btn("#4f46e5"),fontSize:12,padding:"7px 14px"}}>+ Add Row</button>
                               <div style={{display:"flex",gap:14,fontSize:12}}>
                                 <span style={{color:"#94a3b8"}}>Gross: <strong style={{color:"#e2e8f0"}}>₹{fmt(rep.reduce((s,r)=>s+r.gross,0))}</strong></span>
                                 <span style={{color:"#94a3b8"}}>Brk: <strong style={{color:"#fbbf24"}}>₹{fmt(rep.reduce((s,r)=>s+r.totalBrk,0))}</strong></span>
                                 <strong style={{color:net>=0?"#4ade80":"#f87171"}}>Net: ₹{fmt(net)}</strong>
                               </div>
                             </div>
-                            <button onClick={()=>tlSaveTrader(row.trader.id,tlWeek.id,row.trades)}
-                              disabled={saving}
-                              style={{...btn("linear-gradient(135deg,#059669,#047857)"),fontSize:12,padding:"8px 18px",display:"flex",alignItems:"center",gap:6}}>
+                            <button onClick={()=>tlSaveTrader(row.trader.id,tlWeek.id,row.trades)} disabled={saving} style={{...btn("linear-gradient(135deg,#059669,#047857)"),fontSize:12,padding:"8px 18px",display:"flex",alignItems:"center",gap:6}}>
                               {saving?<><Spin s={13} c="white"/><span>Saving...</span></>:"💾 Save Trader"}
                             </button>
                           </div>
@@ -1218,15 +1005,12 @@ function App(){
           </div>
         )}
 
-        {/* ════════ SETTLEMENT TAB ════════ */}
         {tab==="Settlement"&&(
           <div>
             <div style={{marginBottom:16,padding:"14px 18px",background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:12,fontSize:13,color:"#94a3b8",lineHeight:1.8}}>
               <strong style={{color:"#fbbf24",fontSize:14}}>⚖️ How Settlement Works:</strong><br/>
-              1. Select week · 2. Enter <strong style={{color:"white"}}>Settlement Rate</strong> per script (scripts auto-detected from all traders' trades) · 3. Click <strong style={{color:"#4ade80"}}>Settle Week</strong><br/>
-              System will auto-calculate each trader's net position and attach a <strong style={{color:"#c084fc"}}>FORWARD settlement trade</strong> to close it. Bills are then ready in the <strong style={{color:"#60a5fa"}}>Bills tab</strong>.
+              1. Select week · 2. Enter <strong style={{color:"white"}}>Settlement Rate</strong> per script · 3. Click <strong style={{color:"#4ade80"}}>Settle Week</strong>
             </div>
-
             <div style={{display:"flex",gap:12,marginBottom:18,alignItems:"center",flexWrap:"wrap"}}>
               <div style={{display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"10px 14px",flex:1,minWidth:260}}>
                 <span style={{fontSize:12,color:"#94a3b8",fontWeight:700,whiteSpace:"nowrap"}}>📅 Select Week:</span>
@@ -1239,59 +1023,33 @@ function App(){
                 {settlWeek.status==="settled"?"✅ Already Settled — can re-settle to update":"⏳ Open — Ready to Settle"}
               </div>}
             </div>
-
             {settlWeek&&(
               <div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:14,overflow:"hidden"}}>
                 <div style={{background:"linear-gradient(90deg,rgba(30,58,138,0.9),rgba(37,99,235,0.4))",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <span style={{fontSize:15,fontWeight:800}}>📊 Settlement Rates — {settlWeek.label}</span>
                   <span style={{color:"#93c5fd",fontSize:12}}>{settlRates.length} scripts auto-detected</span>
                 </div>
-
-                {/* 3 column header */}
                 <div style={{padding:"10px 16px 4px"}}>
                   {settlRates.length>0&&(
                     <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1.5fr 30px",gap:10,marginBottom:8,padding:"0 4px"}}>
-                      {["Script","Exchange","Settlement Rate ₹",""].map(h=>(
-                        <div key={h} style={{fontSize:11,color:"#fbbf24",fontWeight:700,textTransform:"uppercase",letterSpacing:0.5}}>{h}</div>
-                      ))}
+                      {["Script","Exchange","Settlement Rate ₹",""].map(h=><div key={h} style={{fontSize:11,color:"#fbbf24",fontWeight:700,textTransform:"uppercase",letterSpacing:0.5}}>{h}</div>)}
                     </div>
                   )}
                   {settlRates.map((r,i)=>(
                     <div key={i} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1.5fr 30px",gap:10,marginBottom:10}}>
-                      <input type="text" value={r.script}
-                        onChange={e=>setSettlRates(p=>p.map((x,idx)=>idx===i?{...x,script:e.target.value.toUpperCase()}:x))}
-                        style={{...inpLg,color:"#fbbf24",fontWeight:700}} placeholder="e.g. RELIANCE"/>
-                      <select value={r.exchange||"NSE"}
-                        onChange={e=>setSettlRates(p=>p.map((x,idx)=>idx===i?{...x,exchange:e.target.value}:x))}
-                        style={{...inpLg,color:r.exchange==="MCX"?"#fbbf24":"#60a5fa",fontWeight:700}}>
-                        <option>NSE</option><option>MCX</option>
-                      </select>
-                      <input type="number" placeholder="Enter rate ₹" step="0.01" value={r.rate}
-                        onChange={e=>setSettlRates(p=>p.map((x,idx)=>idx===i?{...x,rate:e.target.value}:x))}
-                        style={{...inpLg,color:"#4ade80",fontWeight:700}}/>
-                      <button onClick={()=>setSettlRates(p=>p.filter((_,idx)=>idx!==i))}
-                        style={{...btn("rgba(220,38,38,0.08)","#f87171"),border:"1px solid rgba(220,38,38,0.2)",width:30,height:42,padding:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>✕</button>
+                      <input type="text" value={r.script} onChange={e=>setSettlRates(p=>p.map((x,idx)=>idx===i?{...x,script:e.target.value.toUpperCase()}:x))} style={{...inpLg,color:"#fbbf24",fontWeight:700}} placeholder="e.g. RELIANCE"/>
+                      <select value={r.exchange||"NSE"} onChange={e=>setSettlRates(p=>p.map((x,idx)=>idx===i?{...x,exchange:e.target.value}:x))} style={{...inpLg,color:r.exchange==="MCX"?"#fbbf24":"#60a5fa",fontWeight:700}}><option>NSE</option><option>MCX</option></select>
+                      <input type="number" placeholder="Enter rate ₹" step="0.01" value={r.rate} onChange={e=>setSettlRates(p=>p.map((x,idx)=>idx===i?{...x,rate:e.target.value}:x))} style={{...inpLg,color:"#4ade80",fontWeight:700}}/>
+                      <button onClick={()=>setSettlRates(p=>p.filter((_,idx)=>idx!==i))} style={{...btn("rgba(220,38,38,0.08)","#f87171"),border:"1px solid rgba(220,38,38,0.2)",width:30,height:42,padding:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>✕</button>
                     </div>
                   ))}
-                  {settlRates.length===0&&(
-                    <div style={{color:"#475569",textAlign:"center",padding:"20px 0",fontSize:13}}>
-                      No scripts detected. Add manually or make sure traders have NORMAL trades for this week.
-                    </div>
-                  )}
-                  <button onClick={()=>setSettlRates(p=>[...p,{script:"",rate:"",exchange:"NSE"}])}
-                    style={{...btn("rgba(234,179,8,0.08)","#fbbf24"),border:"1px dashed rgba(234,179,8,0.3)",width:"100%",marginTop:4,marginBottom:4,fontSize:12}}>
-                    + Add Script Manually
-                  </button>
+                  {settlRates.length===0&&<div style={{color:"#475569",textAlign:"center",padding:"20px 0",fontSize:13}}>No scripts detected. Add manually or make sure traders have NORMAL trades for this week.</div>}
+                  <button onClick={()=>setSettlRates(p=>[...p,{script:"",rate:"",exchange:"NSE"}])} style={{...btn("rgba(234,179,8,0.08)","#fbbf24"),border:"1px dashed rgba(234,179,8,0.3)",width:"100%",marginTop:4,marginBottom:4,fontSize:12}}>+ Add Script Manually</button>
                 </div>
-
                 <div style={{padding:"14px 16px",borderTop:"1px solid rgba(255,255,255,0.06)",background:"rgba(0,0,0,0.2)",display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
-                  <button onClick={runSettlement} disabled={settlLoad||settlRates.length===0}
-                    style={{...btn("linear-gradient(135deg,#059669,#047857)"),padding:"12px 32px",fontSize:14,opacity:settlLoad||settlRates.length===0?0.5:1,display:"flex",alignItems:"center",gap:8}}>
+                  <button onClick={runSettlement} disabled={settlLoad||settlRates.length===0} style={{...btn("linear-gradient(135deg,#059669,#047857)"),padding:"12px 32px",fontSize:14,opacity:settlLoad||settlRates.length===0?0.5:1,display:"flex",alignItems:"center",gap:8}}>
                     {settlLoad?<><Spin s={16} c="white"/><span>Settling all traders...</span></>:"⚖️ Settle Week — Generate Bills for All Traders"}
                   </button>
-                  <div style={{fontSize:11,color:"#475569",lineHeight:1.6}}>
-                    Only traders who have NORMAL trades for these scripts will get settlement trades
-                  </div>
                 </div>
                 {settlMsg&&(
                   <div style={{margin:"0 16px 16px",padding:"12px 16px",background:settlMsg.startsWith("✅")?"rgba(22,163,74,0.1)":"rgba(220,38,38,0.1)",border:`1px solid ${settlMsg.startsWith("✅")?"rgba(22,163,74,0.3)":"rgba(220,38,38,0.3)"}`,borderRadius:8,fontSize:13,color:settlMsg.startsWith("✅")?"#4ade80":"#f87171"}}>
@@ -1304,7 +1062,6 @@ function App(){
           </div>
         )}
 
-        {/* ════════ BILLS TAB ════════ */}
         {tab==="Bills"&&(
           <div>
             <div style={{display:"flex",gap:10,marginBottom:16,alignItems:"center",flexWrap:"wrap",background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"12px 14px"}}>
@@ -1314,44 +1071,28 @@ function App(){
                 {weeks.map(w=><option key={w.id} value={w.id}>{w.label}{w.status==="settled"?" ✓ Settled":""}</option>)}
               </select>
               <button onClick={()=>setPT(p=>p==="dark"?"light":"dark")} style={{background:pdfTheme==="dark"?"#0f172a":"#f0f4f8",border:`2px solid ${pdfTheme==="dark"?"#6366f1":"#2563eb"}`,borderRadius:20,padding:"5px 14px",fontSize:11,fontWeight:700,cursor:"pointer",color:pdfTheme==="dark"?"white":"#1e293b"}}>{pdfTheme==="dark"?"🌑 Dark":"☀️ Light"}</button>
-              {billsWeek&&(
-                <button onClick={()=>loadBillsRef.current(billsWeek)} style={{...btn("rgba(99,102,241,0.15)","#a5b4fc"),border:"1px solid rgba(99,102,241,0.3)",fontSize:12,padding:"8px 12px"}}>🔄 Refresh</button>
-              )}
-              {billsWeek&&billsData.length>0&&(
-                <button onClick={()=>{billsData.forEach(b=>generateBillPDF(b.trader.name,billsWeek.label,b.trades,b.trader,pdfTheme));}}
-                  style={{...btn("#0369a1"),fontSize:12,padding:"8px 14px"}}>⬇ Download All Bills</button>
-              )}
+              {billsWeek&&<button onClick={()=>loadBillsRef.current(billsWeek)} style={{...btn("rgba(99,102,241,0.15)","#a5b4fc"),border:"1px solid rgba(99,102,241,0.3)",fontSize:12,padding:"8px 12px"}}>🔄 Refresh</button>}
+              {billsWeek&&billsData.length>0&&<button onClick={()=>{billsData.forEach(b=>generateBillPDF(b.trader.name,billsWeek.label,b.trades,b.trader,pdfTheme));}} style={{...btn("#0369a1"),fontSize:12,padding:"8px 14px"}}>⬇ Download All Bills</button>}
               {billsLoad&&<Spin s={20}/>}
             </div>
-
             {!billsWeek?(<div style={{textAlign:"center",padding:"60px 20px",background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14,color:"#475569",fontSize:15}}>Select a week to view bills</div>)
             :billsData.length===0&&!billsLoad?(<div style={{textAlign:"center",padding:"60px 20px",background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:14}}>
               <div style={{fontSize:32,marginBottom:12}}>📋</div>
               <div style={{color:"#475569",fontSize:15,marginBottom:8}}>No trades found for this week</div>
-              <div style={{color:"#334155",fontSize:12}}>Make sure traders have trades entered in the <strong style={{color:"#6366f1"}}>Entry</strong> tab for this week, then run <strong style={{color:"#4ade80"}}>Settlement</strong></div>
               <button onClick={()=>loadBillsRef.current(billsWeek)} style={{marginTop:16,background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:8,color:"#a5b4fc",padding:"8px 18px",fontSize:13,fontWeight:600,cursor:"pointer"}}>🔄 Reload</button>
-            </div>)
-            :(
+            </div>):(
               <>
-                {/* Week summary chips */}
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:16}}>
-                  {[
-                    {l:"Traders",v:billsData.length,fc:"#a5b4fc",cnt:true},
-                    {l:"Total Gross",v:billsData.reduce((s,b)=>s+b.report.reduce((x,r)=>x+r.gross,0),0)},
-                    {l:"Total Brk",v:billsData.reduce((s,b)=>s+b.report.reduce((x,r)=>x+r.totalBrk,0),0),fc:"#fbbf24"},
-                    {l:"Total Net",v:billsData.reduce((s,b)=>s+b.net,0)},
-                  ].map(c=>(
+                  {[{l:"Traders",v:billsData.length,fc:"#a5b4fc",cnt:true},{l:"Total Gross",v:billsData.reduce((s,b)=>s+b.report.reduce((x,r)=>x+r.gross,0),0)},{l:"Total Brk",v:billsData.reduce((s,b)=>s+b.report.reduce((x,r)=>x+r.totalBrk,0),0),fc:"#fbbf24"},{l:"Total Net",v:billsData.reduce((s,b)=>s+b.net,0)}].map(c=>(
                     <div key={c.l} style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"12px 16px",textAlign:"center"}}>
                       <div style={{fontSize:10,color:"#64748b",textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>{c.l}</div>
                       <div style={{fontSize:c.cnt?22:17,fontWeight:800,color:c.fc||(c.v>=0?"#4ade80":"#f87171")}}>{c.cnt?c.v:`₹${fmt(c.v)}`}</div>
                     </div>
                   ))}
                 </div>
-
-                {/* Per trader bills */}
                 {billsData.map(b=>{
                   const nr=b.trader.nse_rate||DEF_NSE;
-                  return (
+                  return(
                     <div key={b.trader.id} style={{marginBottom:14,background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:14,overflow:"hidden"}}>
                       <div style={{background:"linear-gradient(90deg,rgba(30,58,138,0.9),rgba(37,99,235,0.4))",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
                         <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -1373,13 +1114,10 @@ function App(){
                           <button onClick={()=>setEB({trader:b.trader,trades:[...b.trades],weekLabel:billsWeek.label})} style={{...btn("rgba(251,191,36,0.15)","#fbbf24"),border:"1px solid rgba(251,191,36,0.3)",fontSize:12,padding:"8px 14px"}}>✏️ Edit</button>
                         </div>
                       </div>
-
                       <div style={{overflowX:"auto"}}>
                         <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,minWidth:500}}>
                           <thead><tr style={{background:"rgba(0,0,0,0.3)"}}>
-                            {["Exchange","Script","Trades","Total Gross","Total Brk","Net P&L"].map(h=>(
-                              <th key={h} style={{padding:"9px 14px",textAlign:"left",color:"#64748b",fontWeight:700,fontSize:11,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
-                            ))}
+                            {["Exchange","Script","Trades","Total Gross","Total Brk","Net P&L"].map(h=><th key={h} style={{padding:"9px 14px",textAlign:"left",color:"#64748b",fontWeight:700,fontSize:11,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>)}
                           </tr></thead>
                           <tbody>{b.report.map((g,i)=>(
                             <tr key={g.script} style={{borderTop:"1px solid rgba(255,255,255,0.05)",background:i%2===0?"transparent":"rgba(255,255,255,0.01)"}}>
@@ -1408,7 +1146,6 @@ function App(){
           </div>
         )}
 
-        {/* ════════ USERS TAB ════════ */}
         {tab==="Users"&&isAdmin&&(
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))",gap:20}}>
             <div style={{background:"rgba(99,102,241,0.05)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:14,padding:24}}>
@@ -1434,18 +1171,14 @@ function App(){
               <div style={{fontSize:11,color:"#a5b4fc",fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:20}}>👥 All Users ({users.length})</div>
               {users.map(u=>(
                 <div key={u.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:"rgba(255,255,255,0.03)",border:`1px solid ${u.active===false?"rgba(220,38,38,0.2)":"rgba(255,255,255,0.06)"}`,borderRadius:10,marginBottom:10,flexWrap:"wrap"}}>
-                  <div style={{width:36,height:36,background:`linear-gradient(135deg,${u.active===false?"#374151,#1f2937":u.role==="ADMIN"?"#7c3aed,#4f46e5":"#0369a1,#0284c7"})`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0,opacity:u.active===false?0.5:1}}>
-                    {u.role==="ADMIN"?"👑":"👤"}
-                  </div>
+                  <div style={{width:36,height:36,background:`linear-gradient(135deg,${u.active===false?"#374151,#1f2937":u.role==="ADMIN"?"#7c3aed,#4f46e5":"#0369a1,#0284c7"})`,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0,opacity:u.active===false?0.5:1}}>{u.role==="ADMIN"?"👑":"👤"}</div>
                   <div style={{flex:1,minWidth:80}}>
                     <div style={{fontWeight:700,color:u.active===false?"#475569":"white",fontSize:13}}>{u.name||u.username}</div>
                     <div style={{fontSize:11,color:"#64748b"}}>@{u.username}</div>
                   </div>
                   <span style={{background:u.role==="ADMIN"?"rgba(168,85,247,0.2)":"rgba(59,130,246,0.2)",color:u.role==="ADMIN"?"#c084fc":"#60a5fa",borderRadius:5,padding:"2px 7px",fontSize:10,fontWeight:700}}>{u.role}</span>
                   {u.id!==currentUser.id?(
-                    <button onClick={()=>togUA(u)} style={{background:u.active===false?"rgba(220,38,38,0.12)":"rgba(22,163,74,0.12)",border:`1px solid ${u.active===false?"rgba(220,38,38,0.3)":"rgba(22,163,74,0.3)"}`,borderRadius:6,color:u.active===false?"#f87171":"#4ade80",padding:"3px 8px",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-                      {u.active===false?"⛔ Inactive":"✅ Active"}
-                    </button>
+                    <button onClick={()=>togUA(u)} style={{background:u.active===false?"rgba(220,38,38,0.12)":"rgba(22,163,74,0.12)",border:`1px solid ${u.active===false?"rgba(220,38,38,0.3)":"rgba(22,163,74,0.3)"}`,borderRadius:6,color:u.active===false?"#f87171":"#4ade80",padding:"3px 8px",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>{u.active===false?"⛔ Inactive":"✅ Active"}</button>
                   ):<span style={{background:"rgba(22,163,74,0.1)",border:"1px solid rgba(22,163,74,0.2)",borderRadius:6,color:"#4ade80",padding:"3px 8px",fontSize:10,fontWeight:700}}>✅ You</span>}
                   <button onClick={()=>openCP(u)} style={{...btn("rgba(99,102,241,0.15)","#a5b4fc"),border:"1px solid rgba(99,102,241,0.25)",fontSize:10,padding:"3px 8px"}}>🔑</button>
                   <button onClick={()=>deleteUser(u.id)} disabled={u.id===currentUser.id} style={{...btn("rgba(220,38,38,0.08)","#f87171"),border:"1px solid rgba(220,38,38,0.2)",width:26,height:26,padding:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,opacity:u.id===currentUser.id?0.3:1}}>✕</button>
@@ -1456,19 +1189,17 @@ function App(){
         )}
       </div>
 
-      {/* ════════ TRADER BROKERAGE SETTINGS MODAL ════════ */}
       {traderSetModal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:16}} onClick={e=>e.target===e.currentTarget&&setTSM(null)}>
           <div className="mo" style={{background:"#0f172a",border:"1px solid rgba(251,191,36,0.3)",borderRadius:16,width:"100%",maxWidth:600,maxHeight:"88vh",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"18px 24px",borderBottom:"1px solid rgba(255,255,255,0.07)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <div style={{fontSize:16,fontWeight:800}}>⚙️ Brokerage Settings</div>
-                <div style={{fontSize:12,color:"#64748b",marginTop:3}}>For trader: <strong style={{color:"#fbbf24"}}>{traderSetModal.name}</strong> · Settings apply to all bill calculations for this trader</div>
+                <div style={{fontSize:12,color:"#64748b",marginTop:3}}>For trader: <strong style={{color:"#fbbf24"}}>{traderSetModal.name}</strong></div>
               </div>
               <button onClick={()=>setTSM(null)} style={{background:"rgba(255,255,255,0.07)",border:"none",borderRadius:8,color:"#94a3b8",width:32,height:32,fontSize:16,cursor:"pointer"}}>✕</button>
             </div>
             <div style={{overflowY:"auto",padding:"20px 24px",flex:1}}>
-              {/* NSE Rate */}
               <div style={{background:"rgba(59,130,246,0.06)",border:"1px solid rgba(59,130,246,0.2)",borderRadius:12,padding:18,marginBottom:18}}>
                 <div style={{fontSize:11,color:"#60a5fa",fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>🔵 NSE Brokerage Rate</div>
                 <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -1482,7 +1213,6 @@ function App(){
                   </div>
                 </div>
               </div>
-              {/* MCX Scripts */}
               <div style={{background:"rgba(234,179,8,0.04)",border:"1px solid rgba(234,179,8,0.2)",borderRadius:12,padding:18}}>
                 <div style={{fontSize:11,color:"#fbbf24",fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>🟡 MCX Script Rates</div>
                 <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 32px",gap:8,marginBottom:8}}>
@@ -1502,8 +1232,7 @@ function App(){
             <div style={{padding:"16px 24px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",gap:10,justifyContent:"flex-end",alignItems:"center"}}>
               {tsmMsg&&<span style={{fontSize:13,color:tsmMsg.startsWith("✓")?"#4ade80":"#f87171",marginRight:8}}>{tsmMsg}</span>}
               <button onClick={()=>setTSM(null)} style={{...btn("rgba(255,255,255,0.06)","#94a3b8"),border:"1px solid rgba(255,255,255,0.1)"}}>Cancel</button>
-              <button onClick={saveTraderSettings} disabled={tsmSaving}
-                style={{...btn("linear-gradient(135deg,#d97706,#b45309)"),display:"flex",alignItems:"center",gap:8,opacity:tsmSaving?0.7:1}}>
+              <button onClick={saveTraderSettings} disabled={tsmSaving} style={{...btn("linear-gradient(135deg,#d97706,#b45309)"),display:"flex",alignItems:"center",gap:8,opacity:tsmSaving?0.7:1}}>
                 {tsmSaving?<><Spin s={14} c="white"/><span>Saving...</span></>:"💾 Save Settings"}
               </button>
             </div>
@@ -1511,7 +1240,6 @@ function App(){
         </div>
       )}
 
-      {/* ════════ NEW WEEK MODAL ════════ */}
       {showNewWeek&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:16}} onClick={e=>e.target===e.currentTarget&&setShNW(false)}>
           <div className="mo" style={{background:"#0f172a",border:"1px solid rgba(99,102,241,0.3)",borderRadius:16,width:"100%",maxWidth:440,padding:32}}>
@@ -1534,7 +1262,6 @@ function App(){
         </div>
       )}
 
-      {/* ════════ EDIT BILL MODAL ════════ */}
       {editBill&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:16}} onClick={e=>e.target===e.currentTarget&&setEB(null)}>
           <div className="mo" style={{background:"#0f172a",border:"1px solid rgba(99,102,241,0.3)",borderRadius:16,width:"100%",maxWidth:1000,maxHeight:"90vh",display:"flex",flexDirection:"column"}}>
@@ -1552,9 +1279,7 @@ function App(){
               <div style={{overflowX:"auto"}}>
                 <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:700}}>
                   <thead><tr style={{background:"rgba(99,102,241,0.15)"}}>
-                    {["Date","Action","Qty","Price","Vol","Script","Type","Exchange","Brk",""].map(h=>(
-                      <th key={h} style={{padding:"9px 11px",textAlign:"left",color:"#a5b4fc",fontWeight:700,fontSize:11,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>
-                    ))}
+                    {["Date","Action","Qty","Price","Vol","Script","Type","Exchange","Brk",""].map(h=><th key={h} style={{padding:"9px 11px",textAlign:"left",color:"#a5b4fc",fontWeight:700,fontSize:11,textTransform:"uppercase",whiteSpace:"nowrap"}}>{h}</th>)}
                   </tr></thead>
                   <tbody>{editBill.trades.map((t,i)=>{
                     const ebNr=editBill.trader.nse_rate||DEF_NSE;
@@ -1603,7 +1328,6 @@ function App(){
         </div>
       )}
 
-      {/* ════════ EXCEL PREVIEW MODAL ════════ */}
       {showXP&&xlPrev&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:16}} onClick={e=>e.target===e.currentTarget&&setShXP(false)}>
           <div className="mo" style={{background:"#0f172a",border:"1px solid rgba(99,102,241,0.3)",borderRadius:16,width:"100%",maxWidth:940,maxHeight:"88vh",display:"flex",flexDirection:"column"}}>
@@ -1636,19 +1360,13 @@ function App(){
             </div>
             <div style={{padding:"14px 22px",borderTop:"1px solid rgba(255,255,255,0.07)",display:"flex",gap:10,justifyContent:"flex-end",flexWrap:"wrap"}}>
               <button onClick={()=>setShXP(false)} style={{...btn("rgba(255,255,255,0.06)","#94a3b8"),border:"1px solid rgba(255,255,255,0.1)"}}>Cancel</button>
-              {/* SAVE BUTTON in Excel Import */}
-              <button onClick={()=>confirmImport(true)} style={{...btn("rgba(22,163,74,0.2)","#4ade80"),border:"1px solid rgba(22,163,74,0.4)",fontSize:13,padding:"10px 20px",display:"flex",alignItems:"center",gap:6}}>
-                💾 Import + Save ({xlPrev.length} rows)
-              </button>
-              <button onClick={()=>confirmImport(false)} style={{...btn("linear-gradient(135deg,#059669,#047857)"),padding:"10px 22px"}}>
-                ✓ Import Only
-              </button>
+              <button onClick={()=>confirmImport(true)} style={{...btn("rgba(22,163,74,0.2)","#4ade80"),border:"1px solid rgba(22,163,74,0.4)",fontSize:13,padding:"10px 20px",display:"flex",alignItems:"center",gap:6}}>💾 Import + Save ({xlPrev.length} rows)</button>
+              <button onClick={()=>confirmImport(false)} style={{...btn("linear-gradient(135deg,#059669,#047857)"),padding:"10px 22px"}}>✓ Import Only</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ════════ PASSWORD MODALS ════════ */}
       {showCPwd&&cpTarget&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:16}} onClick={e=>e.target===e.currentTarget&&setSCP(false)}>
           <div className="mo" style={{background:"#0f172a",border:"1px solid rgba(99,102,241,0.3)",borderRadius:16,width:"100%",maxWidth:400,padding:32}}>
@@ -1666,6 +1384,7 @@ function App(){
           </div>
         </div>
       )}
+
       {showSP&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:16}} onClick={e=>e.target===e.currentTarget&&setShSP(false)}>
           <div className="mo" style={{background:"#0f172a",border:"1px solid rgba(99,102,241,0.3)",borderRadius:16,width:"100%",maxWidth:400,padding:32}}>
