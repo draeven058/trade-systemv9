@@ -293,6 +293,9 @@ function App(){
   const [showXP,setShXP]=useState(false);
   const fileRef=useRef();
   const saveTimer=useRef(null);
+  const tradesRef=useRef(trades);
+  const selTraderRef=useRef(selTrader);
+  const selWeekRef=useRef(selWeek);
 
   // ── Computed ──
   const traderNseRate = selTrader?.nse_rate || DEF_NSE;
@@ -477,6 +480,11 @@ function App(){
   useEffect(()=>{if(selTrader&&selWeek)loadTrades(selTrader.id,selWeek.id);},[selTrader,selWeek]);
   useEffect(()=>{if(tab==="Settlement"&&settlWeek)loadSettlRates(settlWeek.id);},[tab,settlWeek]);
   useEffect(()=>{if(billsWeek)loadBillsRef.current(billsWeek);},[billsWeek]);
+  useEffect(()=>{tradesRef.current=trades;},[trades]);
+  useEffect(()=>{selTraderRef.current=selTrader;},[selTrader]);
+  useEffect(()=>{selWeekRef.current=selWeek;},[selWeek]);
+
+
   // Reload bills whenever Bills tab is opened
   useEffect(()=>{if(tab==="Bills"&&billsWeek)loadBillsRef.current(billsWeek);},[tab]);
 
@@ -516,17 +524,17 @@ function App(){
 
   useEffect(()=>{
     if(!currentUser||!selTrader||!selWeek||tradesLoad)return;
-    if(saveTimer.current)clearTimeout(saveTimer.current);
+    if(.current)clearTimeout(.current);
     // Capture current values in closure for timer
     const tid=selTrader.id, wid=selWeek.id, tArr=[...trades];
-    saveTimer.current=setTimeout(()=>doSaveRef.current(tid,wid,tArr,true),1500);
-    return()=>clearTimeout(saveTimer.current);
+    .current=setTimeout(()=>doSaveRef.current(tid,wid,tArr,true),1500);
+    return()=>clearTimeout(.current);
   },[trades,currentUser,selTrader,selWeek,tradesLoad]);
 
   const manualSave=async()=>{
     if(!selTrader||!selWeek){return;}
     setMSaving(true);
-    if(saveTimer.current)clearTimeout(saveTimer.current);
+    if(.current)clearTimeout(.current);
     await doSaveRef.current(selTrader.id,selWeek.id,[...tradesRef.current],true);
     setMSaving(false);
   };
@@ -646,7 +654,7 @@ function App(){
     const merged=[...base,...xlPrev.map((t,i)=>({...t,sort_order:Math.min(maxO+i+10,1999990)}))];
     setTrades(merged);setShXP(false);setXP(null);
     if(andSave&&selTraderRef.current&&selWeekRef.current){
-      if(saveTimer.current)clearTimeout(saveTimer.current);
+      if(.current)clearTimeout(.current);
       await doSaveRef.current(selTraderRef.current.id,selWeekRef.current.id,merged,true);
     }
   };
